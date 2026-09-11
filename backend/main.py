@@ -55,7 +55,7 @@ def get_db_connection():
         connection = mysql.connector.connect(
             host=os.environ.get("DB_HOST", "127.0.0.1"),
             user=os.environ.get("DB_USER", "root"),
-            password=os.environ.get("DB_PASSWORD", ""),
+            password=os.environ.get("DB_PASSWORD", "0407"),
             database=os.environ.get("DB_NAME", "coldguard_ai")
         )
         return connection
