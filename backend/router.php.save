@@ -1,0 +1,53 @@
+<?php
+
+$uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+
+$routes = [
+    '/api/health'      => '/api/health.php',
+    '/api/products'    => '/api/products.php',
+    '/api/devices'     => '/api/devices.php',
+    '/api/temperature' => '/api/temperature.php',
+    '/api/alerts'      => '/api/alerts.php',
+    '/api/dashboard'   => '/api/dashboard.php',
+    '/api/reports'     => '/api/reports.php',
+    '/api/shelf_life'  => '/api/shelf_life.php',
+];
+
+if (isset($routes[$uri])) {
+    require __DIR__ . $routes[$uri];
+    exit;
+}
+
+if (preg_match('#^/api/temperature/device/([0-9]+)$#', $uri, $matches)) {
+    $_GET['device_id'] = $matches[1];
+    require __DIR__ . '/api/temperature.php';
+    exit;
+}
+
+if (preg_match('#^/api/(products|devices|alerts)/([0-9]+)$#', $uri, $matches)) {
+    $_GET['id'] = $matches[2];
+    require __DIR__ . '/api/' . $matches[1] . '.php';
+    exit;
+}
+
+$file = __DIR__ . $uri;
+
+if ($uri !== '/' && is_file($file)) {
+    return false;
+}
+
+if (str_starts_with($uri, '/api/')) {
+    http_response_code(404);
+    header('Content-Type: application/json; charset=UTF-8');
+
+    echo json_encode([
+        'success' => false,
+        'error' => 'API endpoint not found',
+        'path' => $uri
+    ]);
+
+    exit;
+}
+
+return false;
+

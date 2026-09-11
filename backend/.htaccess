@@ -1,0 +1,41 @@
+# Apache Rewrite Rules for ColdGuard AI Backend
+# Place this file in the backend/ folder root
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /coldguard-api/
+
+    # Route /api/dashboard/* to dashboard.php
+    RewriteRule ^api/dashboard(/.*)?$ api/dashboard.php [QSA,L]
+
+    # Route /api/devices/* to devices.php
+    RewriteRule ^api/devices(/.*)?$  api/devices.php  [QSA,L]
+
+    # Route /api/temperature/* to temperature.php
+    RewriteRule ^api/temperature(/.*)?$ api/temperature.php [QSA,L]
+
+    # Route /api/products/* to products.php
+    RewriteRule ^api/products(/.*)?$ api/products.php [QSA,L]
+
+    # Route /api/alerts/* to alerts.php
+    RewriteRule ^api/alerts(/.*)?$ api/alerts.php [QSA,L]
+
+    # Route /api/shelf-life/* to shelf_life.php
+    RewriteRule ^api/shelf-life(/.*)?$ api/shelf_life.php [QSA,L]
+
+    # Route /api/reports/* to reports.php
+    RewriteRule ^api/reports(/.*)?$ api/reports.php [QSA,L]
+
+    # Route /api/health to health.php
+    RewriteRule ^api/health(/.*)?$ api/health.php [QSA,L]
+</IfModule>
+
+# Security: Prevent direct access to config files
+<Files "database.php">
+    Order Allow,Deny
+    Deny from all
+</Files>
+<Files "cors.php">
+    Order Allow,Deny
+    Deny from all
+</Files>
