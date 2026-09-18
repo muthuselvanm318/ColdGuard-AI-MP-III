@@ -19,12 +19,17 @@ except ImportError:
 load_dotenv(os.path.join(os.path.dirname(__file__), '../.env'))
 
 def parse_iso_datetime(dt_str: str) -> str:
-    if not dt_str: return None
-    if dt_str.endswith('Z'):
-        dt_str = dt_str[:-1] + '+00:00'
+    if not dt_str:
+        return None
     try:
-        return datetime.fromisoformat(dt_str).strftime('%Y-%m-%d %H:%M:%S')
-    except:
+        if dt_str.endswith('Z'):
+            dt_str = dt_str[:-1] + '+00:00'
+        dt = datetime.fromisoformat(dt_str)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.astimezone(timezone.utc)
+        return dt.strftime('%Y-%m-%d %H:%M:%S')
+    except Exception:
         return dt_str # fallback
 
 app = FastAPI(title="ColdGuard AI API")
@@ -170,7 +175,15 @@ def calculate_features(milk_id: str, current_temp: float):
 
     start_time = product['storage_start_time']
     if isinstance(start_time, str):
-        start_time = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+        try:
+            start_time = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+        except Exception:
+            raise Exception("Invalid storage_start_time")
+            
+    if start_time.tzinfo is None:
+        start_time = start_time.replace(tzinfo=timezone.utc)
+    else:
+        start_time = start_time.astimezone(timezone.utc)
 
     now = datetime.now(timezone.utc)
     storage_hours = max(0.0, (now - start_time).total_seconds() / 3600.0)
@@ -441,7 +454,10 @@ def post_temperature(payload: TemperaturePayload, background_tasks: BackgroundTa
         raise HTTPException(status_code=500, detail="Database connection failed")
         
     try:
-        timestamp = payload.timestamp if payload.timestamp else datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        if payload.timestamp:
+            timestamp = parse_iso_datetime(payload.timestamp)
+        else:
+            timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
         
         cursor = conn.cursor()
         query = "INSERT INTO temperature_readings (device_id, milk_id, temperature_c, recorded_at) VALUES (%s, %s, %s, %s)"
