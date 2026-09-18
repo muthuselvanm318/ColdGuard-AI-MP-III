@@ -48,12 +48,25 @@ export default function ProductDetails() {
 
         if (!mounted) return;
 
+        // Normalise latestPrediction for v2.0 vs old shape
+        let normPred = latestPred;
+        if (latestPred) {
+          if (latestPred.shelf_life && latestPred.safety) {
+            normPred = {
+              safety_status: latestPred.safety.label,
+              remaining_shelf_life_hours: latestPred.shelf_life.remaining_hours
+            };
+          } else if (latestPred.prediction) {
+            normPred = latestPred.prediction;
+          }
+        }
+
         if (prod) {
           setProduct(prod);
           setTemperatureHistory(tempHist || []);
           setLatestTemperature(latestTemp || null);
           setPredictionHistory(predHist || []);
-          setLatestPrediction(latestPred || null);
+          setLatestPrediction(normPred || null);
         } else {
           setError("Product not found");
         }

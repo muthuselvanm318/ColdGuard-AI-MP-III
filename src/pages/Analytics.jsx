@@ -5,6 +5,26 @@ import DemoBanner from '../components/DemoBanner';
 import { BarChart3, Filter, ShieldCheck, Activity, AlertCircle, BrainCircuit, Play, Clock, CheckCircle2 } from 'lucide-react';
 import { forceLivePrediction, getLatestPrediction } from '../api/predictionsApi';
 
+// Normalise prediction across both old and new API shapes
+function normalisePrediction(raw) {
+  if (!raw) return null;
+  // new v2.0 shape has shelf_life / safety / dashboard blocks
+  if (raw.shelf_life && raw.safety) {
+    return {
+      predicted_shelf_life_days:  raw.shelf_life.remaining_days,
+      predicted_status:           raw.safety.label,
+      prediction_time:            raw.prediction_time || new Date().toISOString()
+    };
+  }
+  // old / prediction wrapper shape
+  const p = raw.prediction || raw;
+  return {
+    predicted_shelf_life_days:  p.remaining_shelf_life_hours ? +(p.remaining_shelf_life_hours / 24).toFixed(2) : null,
+    predicted_status:           p.safety_status ?? null,
+    prediction_time:            p.prediction_time || p.timestamp || new Date().toISOString()
+  };
+}
+
 export default function Analytics() {
   const { temperatureReadings, alerts, products, devices } = useData();
   const [selectedProduct, setSelectedProduct] = useState('ALL');
@@ -21,7 +41,7 @@ export default function Analytics() {
     if (!predictingProduct && safeProducts.length > 0) {
       setPredictingProduct(safeProducts[0].milk_id);
     }
-  }, [safeProducts]);
+  }, [safeProducts, predictingProduct]);
 
   useEffect(() => {
     if (predictingProduct) {
@@ -33,7 +53,7 @@ export default function Analytics() {
     try {
       setPredictionError(null);
       const result = await getLatestPrediction(predictingProduct);
-      setPredictionResult(result);
+      setPredictionResult(normalisePrediction(result));
     } catch (err) {
       // It's okay if there's no latest prediction
       setPredictionResult(null);
@@ -46,7 +66,11 @@ export default function Analytics() {
     setPredictionError(null);
     try {
       const result = await forceLivePrediction(predictingProduct);
-      setPredictionResult(result);
+      if (result) {
+        setPredictionResult(normalisePrediction(result));
+      } else {
+        setPredictionError("Failed to generate prediction. Ensure device has recent temperature data.");
+      }
     } catch (err) {
       setPredictionError("Failed to generate prediction. Ensure device has recent temperature data.");
     } finally {
@@ -59,7 +83,7 @@ export default function Analytics() {
   const safeDevices = devices || [];
   const filtered = selectedProduct === 'ALL'
     ? safeReadings
-    : safeReadings.filter(r => r.product_id === selectedProduct);
+    : safeReadings.filter(r => r.milk_id === selectedProduct || r.product_id === selectedProduct); // Support both keys
 
   const hasData = filtered.length > 0;
 
@@ -78,7 +102,7 @@ export default function Analytics() {
           <select value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)} className="select-input">
             <option value="ALL">All Food Items</option>
             {safeProducts.map(p => (
-              <option key={p.id} value={p.product_code}>{p.name} ({p.product_code})</option>
+              <option key={p.id || p.milk_id} value={p.milk_id}>{p.product_name} ({p.milk_id})</option>
             ))}
           </select>
         </div>
@@ -117,8 +141,8 @@ export default function Analytics() {
           {hasData ? (
             <TemperatureChart data={filtered} height={320} />
           ) : (
-            <div className="chart-empty-state py-12">
-              <AlertCircle size={32} className="text-muted mb-2" />
+            <div className="chart-empty-state py-12 text-center text-muted border border-dashed border-glass rounded">
+              <AlertCircle size={32} className="text-muted mx-auto mb-2" />
               <p>No data available for the selected analytics filter</p>
             </div>
           )}
@@ -140,7 +164,7 @@ export default function Analytics() {
               style={{width: '100%'}}
             >
               {safeProducts.map(p => (
-                <option key={p.id} value={p.product_code}>{p.name} ({p.product_code})</option>
+                <option key={p.id || p.milk_id} value={p.milk_id}>{p.product_name} ({p.milk_id})</option>
               ))}
             </select>
           </div>
@@ -171,17 +195,17 @@ export default function Analytics() {
               <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px'}}>
                 <div style={{background: 'var(--bg-card)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-glass)', boxShadow: 'var(--shadow-crisp)'}}>
                   <div className="text-xs text-muted mb-1 flex-align"><Clock size={12} className="mr-1"/> Shelf Life</div>
-                  <div className="text-lg font-bold text-primary">{predictionResult.predicted_shelf_life_days?.toFixed(1)} Days</div>
+                  <div className="text-lg font-bold text-primary">{predictionResult.predicted_shelf_life_days?.toFixed(1) ?? '—'} Days</div>
                 </div>
                 <div style={{background: 'var(--bg-card)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-glass)', boxShadow: 'var(--shadow-crisp)'}}>
                   <div className="text-xs text-muted mb-1 flex-align"><ShieldCheck size={12} className="mr-1"/> Safety Status</div>
-                  <div className={`text-lg font-bold ${predictionResult.predicted_status === 'SAFE' ? 'text-success' : 'text-danger'}`}>
+                  <div className={`text-lg font-bold ${predictionResult.predicted_status === 'SAFE' ? 'text-success' : predictionResult.predicted_status === 'UNSAFE' ? 'text-danger' : 'text-warning'}`}>
                     {predictionResult.predicted_status || 'UNKNOWN'}
                   </div>
                 </div>
               </div>
               <div className="text-xs text-muted mt-3 text-right">
-                Generated at: {new Date(predictionResult.prediction_time).toLocaleTimeString()}
+                Generated at: {predictionResult.prediction_time ? new Date(predictionResult.prediction_time).toLocaleTimeString() : 'Just now'}
               </div>
             </div>
           )}

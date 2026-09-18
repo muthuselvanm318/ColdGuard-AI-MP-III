@@ -596,13 +596,33 @@ def get_products():
     cursor.execute("SELECT * FROM milk_products")
     data = cursor.fetchall()
     conn.close()
-    # Map 'milk_id' to 'id' for the UI compatibility if needed, though 'milk_id' is preferred.
     for p in data:
-        p["id"] = p["milk_id"]
+        p["id"]           = p["milk_id"]
         p["product_code"] = p["milk_id"]
-        p["name"] = p["product_name"]
-        p["current_temperature_c"] = 4.0 # default/placeholder if no reading
+        p["name"]         = p["product_name"]
+        p["current_temperature_c"] = 4.0
     return {"success": True, "data": data}
+
+@app.get("/api/products/{milk_id}")
+def get_product_by_id(milk_id: str):
+    """FIX: was missing - caused 'Product not found' on detail page."""
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(status_code=500, detail="DB unavailable")
+    cursor = conn.cursor(dictionary=True)
+    # Accept both milk_id and numeric id for robustness
+    cursor.execute(
+        "SELECT * FROM milk_products WHERE milk_id = %s LIMIT 1",
+        (milk_id,)
+    )
+    product = cursor.fetchone()
+    conn.close()
+    if not product:
+        raise HTTPException(status_code=404, detail=f"Product '{milk_id}' not found")
+    product["id"]           = product["milk_id"]
+    product["product_code"] = product["milk_id"]
+    product["name"]         = product["product_name"]
+    return {"success": True, "data": product}
 
 @app.post("/api/products")
 def add_product(payload: ProductPayload):
