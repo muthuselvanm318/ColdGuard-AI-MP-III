@@ -331,23 +331,35 @@ def generate_live_prediction(milk_id: str, device_id: str, current_temp: float):
         caution_prob = 0.0                   # binary model — always 0 (DB compat)
 
         if unsafe_prob > 0.5:
-            send_alert(milk_id, current_temp, unsafe_prob)
-            
-            # --- Save to alerts table ---
+            # Check if there's already an active alert for this milk_id to prevent SMS spam
             conn_alert = get_db_connection()
+            should_alert = True
             if conn_alert:
                 try:
-                    c_alert = conn_alert.cursor()
-                    alert_code = f"ALT-{int(datetime.now(timezone.utc).timestamp())}"
-                    c_alert.execute("""
-                        INSERT INTO alerts (alert_code, type, severity, milk_id, device_id, temperature_c, message, status)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (alert_code, "SPOILAGE", "CRITICAL", milk_id, data.get("device_id"), current_temp, f"Product {milk_id} safety breached >50%", "ACTIVE"))
-                    conn_alert.commit()
-                except Exception as e:
-                    print(f"[v2.0] Failed to save alert to database: {e}")
-                finally:
-                    conn_alert.close()
+                    c_alert = conn_alert.cursor(dictionary=True)
+                    c_alert.execute("SELECT id FROM alerts WHERE milk_id = %s AND status = 'ACTIVE' LIMIT 1", (milk_id,))
+                    if c_alert.fetchone():
+                        should_alert = False
+                except Exception:
+                    pass
+            
+            if should_alert:
+                send_alert(milk_id, current_temp, unsafe_prob)
+                
+                # --- Save to alerts table ---
+                if conn_alert:
+                    try:
+                        c_alert = conn_alert.cursor()
+                        alert_code = f"ALT-{int(datetime.now(timezone.utc).timestamp())}"
+                        c_alert.execute("""
+                            INSERT INTO alerts (alert_code, type, severity, milk_id, device_id, temperature_c, message, status)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (alert_code, "SPOILAGE", "CRITICAL", milk_id, device_id, current_temp, f"Product {milk_id} safety breached >50%", "ACTIVE"))
+                        conn_alert.commit()
+                    except Exception as e:
+                        print(f"[v2.0] Failed to save alert to database: {e}")
+            if conn_alert:
+                conn_alert.close()
 
         # UPDATED FOR MODEL v2.0: apply temperature threshold safety rules
         # These override the model when temperature is unambiguous

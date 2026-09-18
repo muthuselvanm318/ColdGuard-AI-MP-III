@@ -13,7 +13,7 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 
 TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
 TWILIO_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
-TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER", "")
+TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER") or os.getenv("TWILIO_FROM_NUMBER", "")
 
 def send_alert(milk_id: str, current_temp: float, unsafe_prob: float, 
                target_email: str = None, 
