@@ -5,33 +5,25 @@
     "rows": 35000,
     "kaggle_reference": "https://www.kaggle.com/datasets/cplinta/milkquality"
   },
-  "training_time_seconds": 8.5,
+  "training_time_seconds": 14.4,
   "model_1_regressor": {
     "model": "XGBoost Regressor v2.0",
-    "trained_at": "2026-09-17T23:28:07.023113",
+    "trained_at": "2026-09-18T08:10:12.424067",
     "train_samples": 24500,
     "val_samples": 5250,
     "test_samples": 5250,
     "features": [
       "storage_hours",
-      "hour_of_day",
-      "day_of_week",
-      "is_weekend",
       "current_temperature_c",
       "avg_temperature_c",
       "min_temperature_c",
       "max_temperature_c",
       "temperature_std_c",
-      "temp_last_1h",
-      "temp_last_3h",
       "temp_last_6h",
       "temp_volatility",
-      "time_above_6c_hours",
-      "time_above_8c_hours",
       "time_in_danger_zone_pct",
       "num_temperature_excursions",
       "longest_excursion_hours",
-      "cumulative_temperature_exposure",
       "temperature_trend",
       "degradation_rate_per_hour"
     ],
@@ -43,43 +35,35 @@
       "colsample_bytree": 0.8
     },
     "val_metrics": {
-      "rmse": 1.0514,
-      "mae": 0.6179,
-      "r2": 0.9999
+      "rmse": 2.8773,
+      "mae": 1.7488,
+      "r2": 0.9993
     },
     "test_metrics": {
-      "rmse": 1.0955,
-      "mae": 0.6278,
-      "r2": 0.9999
+      "rmse": 2.9357,
+      "mae": 1.7881,
+      "r2": 0.9992
     }
   },
   "model_2_classifier": {
     "model": "Random Forest Classifier v2.0",
-    "trained_at": "2026-09-17T23:28:14.273145",
+    "trained_at": "2026-09-18T08:10:25.626761",
     "train_samples": 24500,
     "train_samples_after_smote": 35394,
     "val_samples": 5250,
     "test_samples": 5250,
     "features": [
       "storage_hours",
-      "hour_of_day",
-      "day_of_week",
-      "is_weekend",
       "current_temperature_c",
       "avg_temperature_c",
       "min_temperature_c",
       "max_temperature_c",
       "temperature_std_c",
-      "temp_last_1h",
-      "temp_last_3h",
       "temp_last_6h",
       "temp_volatility",
-      "time_above_6c_hours",
-      "time_above_8c_hours",
       "time_in_danger_zone_pct",
       "num_temperature_excursions",
       "longest_excursion_hours",
-      "cumulative_temperature_exposure",
       "temperature_trend",
       "degradation_rate_per_hour"
     ],
@@ -89,17 +73,17 @@
       "class_weight": "balanced"
     },
     "val_metrics": {
-      "accuracy": 0.9998,
+      "accuracy": 0.9985,
       "roc_auc": 1.0
     },
     "test_metrics": {
       "accuracy": 0.9981,
       "roc_auc": 1.0,
-      "precision_SAFE": 0.9997,
-      "recall_SAFE": 0.9976,
+      "precision_SAFE": 1.0,
+      "recall_SAFE": 0.9974,
       "f1_SAFE": 0.9987,
-      "precision_UNSAFE": 0.9939,
-      "recall_UNSAFE": 0.9993,
+      "precision_UNSAFE": 0.9932,
+      "recall_UNSAFE": 1.0,
       "f1_UNSAFE": 0.9966
     }
   }

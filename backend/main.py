@@ -118,24 +118,16 @@ class SettingsPayload(BaseModel):
 # UPDATED FOR MODEL v2.0: ordered feature list (must match train_models.py)
 MODEL_FEATURE_ORDER = [
     'storage_hours',
-    'hour_of_day',
-    'day_of_week',
-    'is_weekend',
     'current_temperature_c',
     'avg_temperature_c',
     'min_temperature_c',
     'max_temperature_c',
     'temperature_std_c',
-    'temp_last_1h',
-    'temp_last_3h',
     'temp_last_6h',
     'temp_volatility',
-    'time_above_6c_hours',
-    'time_above_8c_hours',
     'time_in_danger_zone_pct',
     'num_temperature_excursions',
     'longest_excursion_hours',
-    'cumulative_temperature_exposure',
     'temperature_trend',
     'degradation_rate_per_hour',
 ]
@@ -253,30 +245,20 @@ def calculate_features(milk_id: str, current_temp: float):
         spoilage_consumed / max(1.0, storage_hours), 6
     )
 
-    # ── 5. Assemble full 21-feature dict ─────────────────────────────────
+    # ── 5. Assemble full 14-feature dict ─────────────────────────────────
     features = {
-        # Original 12
         'storage_hours':                  storage_hours,
         'current_temperature_c':          current_temp,
         'avg_temperature_c':              avg_temp,
         'min_temperature_c':              min_temp,
         'max_temperature_c':              max_temp,
         'temperature_std_c':              std_temp,
-        'time_above_6c_hours':            above_6,
-        'time_above_8c_hours':            above_8,
-        'num_temperature_excursions':     num_excursions,
-        'longest_excursion_hours':        longest_excursion,
-        'cumulative_temperature_exposure': cumulative,
-        'temperature_trend':              trend,
-        # NEW 9 (v2.0)
-        'hour_of_day':                    hour_of_day,
-        'day_of_week':                    day_of_week,
-        'is_weekend':                     is_weekend,
-        'temp_last_1h':                   temp_last_1h,
-        'temp_last_3h':                   temp_last_3h,
         'temp_last_6h':                   temp_last_6h,
         'temp_volatility':                temp_volatility,
         'time_in_danger_zone_pct':        time_in_danger_zone_pct,
+        'num_temperature_excursions':     num_excursions,
+        'longest_excursion_hours':        longest_excursion,
+        'temperature_trend':              trend,
         'degradation_rate_per_hour':      degradation_rate_per_hour,
     }
     return features

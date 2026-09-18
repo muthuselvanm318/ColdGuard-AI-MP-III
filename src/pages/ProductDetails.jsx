@@ -4,7 +4,7 @@ import SafetyBadge from '../components/SafetyBadge';
 import TemperatureChart from '../components/TemperatureChart';
 import { getProductById } from '../api/productsApi';
 import { getTemperatureHistory, getLatestTemperature } from '../api/temperatureApi';
-import { getPredictions, getLatestPrediction } from '../api/predictionsApi';
+import { getPredictions, getLatestPrediction, forceLivePrediction } from '../api/predictionsApi';
 import { 
   ArrowLeft, 
   Package, 
@@ -14,7 +14,8 @@ import {
   Clock, 
   Thermometer, 
   BrainCircuit, 
-  AlertTriangle 
+  AlertTriangle,
+  Play
 } from 'lucide-react';
 
 export default function ProductDetails() {
@@ -28,6 +29,9 @@ export default function ProductDetails() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const [isPredicting, setIsPredicting] = useState(false);
+  const [predictionError, setPredictionError] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -85,6 +89,33 @@ export default function ProductDetails() {
       clearInterval(interval);
     };
   }, [id]);
+
+  const handleForcePrediction = async () => {
+    if (!product) return;
+    setIsPredicting(true);
+    setPredictionError(null);
+    try {
+      const result = await forceLivePrediction(product.milk_id);
+      if (result) {
+        let normPred = result;
+        if (result.shelf_life && result.safety) {
+          normPred = {
+            safety_status: result.safety.label,
+            remaining_shelf_life_hours: result.shelf_life.remaining_hours
+          };
+        } else if (result.prediction) {
+          normPred = result.prediction;
+        }
+        setLatestPrediction(normPred);
+      } else {
+        setPredictionError("Failed to generate prediction. Ensure device has recent temperature data.");
+      }
+    } catch (err) {
+      setPredictionError("Failed to generate prediction. Ensure device has recent temperature data.");
+    } finally {
+      setIsPredicting(false);
+    }
+  };
 
   if (loading && !product) {
     return (
@@ -165,6 +196,25 @@ export default function ProductDetails() {
             <h3 className="section-title">
               <ShieldCheck size={18} className="text-success" /> Current Safety
             </h3>
+
+            <button 
+              className="btn-primary flex-center justify-center mt-4" 
+              style={{width: '100%'}}
+              onClick={handleForcePrediction}
+              disabled={isPredicting || !product}
+            >
+              {isPredicting ? (
+                <><div className="spinner mr-2" style={{width: '16px', height: '16px', borderTopColor: 'white'}}></div> Running Model...</>
+              ) : (
+                <><Play size={16} className="mr-2"/> Force Live Prediction</>
+              )}
+            </button>
+
+            {predictionError && (
+              <div className="text-danger text-sm mt-4 p-3" style={{backgroundColor: '#FEF2F2', borderRadius: '4px', border: '1px solid #FECACA'}}>
+                <AlertTriangle size={14} className="inline mr-1" /> {predictionError}
+              </div>
+            )}
             
             <div className="details-info-grid mt-4">
               <div className="info-item">
