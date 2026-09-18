@@ -133,13 +133,12 @@ MODEL_FEATURE_ORDER = [
     'min_temperature_c',
     'max_temperature_c',
     'temperature_std_c',
-    'temp_last_6h',
-    'temp_volatility',
-    'time_in_danger_zone_pct',
+    'time_above_6c_hours',
+    'time_above_8c_hours',
     'num_temperature_excursions',
     'longest_excursion_hours',
+    'cumulative_temperature_exposure',
     'temperature_trend',
-    'degradation_rate_per_hour',
 ]
 
 # UPDATED FOR MODEL v2.0: Q10 spoilage constants (same as generate_data.py)
@@ -263,7 +262,7 @@ def calculate_features(milk_id: str, current_temp: float):
         spoilage_consumed / max(1.0, storage_hours), 6
     )
 
-    # ── 5. Assemble full 14-feature dict ─────────────────────────────────
+    # ── 5. Assemble full 12-feature dict ─────────────────────────────────
     features = {
         'storage_hours':                  storage_hours,
         'current_temperature_c':          current_temp,
@@ -271,13 +270,12 @@ def calculate_features(milk_id: str, current_temp: float):
         'min_temperature_c':              min_temp,
         'max_temperature_c':              max_temp,
         'temperature_std_c':              std_temp,
-        'temp_last_6h':                   temp_last_6h,
-        'temp_volatility':                temp_volatility,
-        'time_in_danger_zone_pct':        time_in_danger_zone_pct,
+        'time_above_6c_hours':            above_6,
+        'time_above_8c_hours':            above_8,
         'num_temperature_excursions':     num_excursions,
         'longest_excursion_hours':        longest_excursion,
+        'cumulative_temperature_exposure': cumulative,
         'temperature_trend':              trend,
-        'degradation_rate_per_hour':      degradation_rate_per_hour,
     }
     return features
 

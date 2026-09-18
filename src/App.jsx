@@ -68,6 +68,7 @@ export default function App() {
                   <Route path="/products" element={<Products />} />
                   <Route path="/products/:id" element={<ProductDetails />} />
                   <Route path="/devices" element={<Devices />} />
+                  <Route path="/devices/:id" element={<DeviceDetails />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/alerts" element={<Alerts />} />

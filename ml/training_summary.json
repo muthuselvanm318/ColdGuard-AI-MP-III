@@ -1,14 +1,14 @@
 {
   "pipeline_version": "2.0",
   "dataset": {
-    "path": "/Users/selvam/Documents/ML/Multidiciplinary Project /MP-III/ml/synthetic_milk_data.csv",
+    "path": "/Users/selvam/Documents/ML/Multidiciplinary Project /MP-III/ml/synthetic_milk_16_features_35k.csv",
     "rows": 35000,
     "kaggle_reference": "https://www.kaggle.com/datasets/cplinta/milkquality"
   },
-  "training_time_seconds": 14.4,
+  "training_time_seconds": 1.7,
   "model_1_regressor": {
     "model": "XGBoost Regressor v2.0",
-    "trained_at": "2026-09-18T08:10:12.424067",
+    "trained_at": "2026-09-18T22:01:41.554855",
     "train_samples": 24500,
     "val_samples": 5250,
     "test_samples": 5250,
@@ -19,13 +19,12 @@
       "min_temperature_c",
       "max_temperature_c",
       "temperature_std_c",
-      "temp_last_6h",
-      "temp_volatility",
-      "time_in_danger_zone_pct",
+      "time_above_6c_hours",
+      "time_above_8c_hours",
       "num_temperature_excursions",
       "longest_excursion_hours",
-      "temperature_trend",
-      "degradation_rate_per_hour"
+      "cumulative_temperature_exposure",
+      "temperature_trend"
     ],
     "hyperparameters": {
       "n_estimators": 300,
@@ -35,21 +34,21 @@
       "colsample_bytree": 0.8
     },
     "val_metrics": {
-      "rmse": 2.8773,
-      "mae": 1.7488,
-      "r2": 0.9993
+      "rmse": 20.2655,
+      "mae": 14.9749,
+      "r2": 0.7539
     },
     "test_metrics": {
-      "rmse": 2.9357,
-      "mae": 1.7881,
-      "r2": 0.9992
+      "rmse": 20.9572,
+      "mae": 15.5392,
+      "r2": 0.7466
     }
   },
   "model_2_classifier": {
     "model": "Random Forest Classifier v2.0",
-    "trained_at": "2026-09-18T08:10:25.626761",
+    "trained_at": "2026-09-18T22:01:42.621371",
     "train_samples": 24500,
-    "train_samples_after_smote": 35394,
+    "train_samples_after_smote": 29592,
     "val_samples": 5250,
     "test_samples": 5250,
     "features": [
@@ -59,13 +58,12 @@
       "min_temperature_c",
       "max_temperature_c",
       "temperature_std_c",
-      "temp_last_6h",
-      "temp_volatility",
-      "time_in_danger_zone_pct",
+      "time_above_6c_hours",
+      "time_above_8c_hours",
       "num_temperature_excursions",
       "longest_excursion_hours",
-      "temperature_trend",
-      "degradation_rate_per_hour"
+      "cumulative_temperature_exposure",
+      "temperature_trend"
     ],
     "hyperparameters": {
       "n_estimators": 200,
@@ -73,18 +71,18 @@
       "class_weight": "balanced"
     },
     "val_metrics": {
-      "accuracy": 0.9985,
-      "roc_auc": 1.0
+      "accuracy": 0.9137,
+      "roc_auc": 0.9816
     },
     "test_metrics": {
-      "accuracy": 0.9981,
-      "roc_auc": 1.0,
-      "precision_SAFE": 1.0,
-      "recall_SAFE": 0.9974,
-      "f1_SAFE": 0.9987,
-      "precision_UNSAFE": 0.9932,
-      "recall_UNSAFE": 1.0,
-      "f1_UNSAFE": 0.9966
+      "accuracy": 0.9164,
+      "roc_auc": 0.9816,
+      "precision_SAFE": 0.8648,
+      "recall_SAFE": 0.9351,
+      "f1_SAFE": 0.8985,
+      "precision_UNSAFE": 0.955,
+      "recall_UNSAFE": 0.9041,
+      "f1_UNSAFE": 0.9289
     }
   }
 }

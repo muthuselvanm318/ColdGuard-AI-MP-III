@@ -51,7 +51,7 @@ warnings.filterwarnings("ignore")
 
 # ─── Paths ─────────────────────────────────────────────────────────────────
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
-DATA_PATH   = os.path.join(SCRIPT_DIR, "synthetic_milk_data.csv")
+DATA_PATH   = os.path.join(SCRIPT_DIR, "synthetic_milk_16_features_35k.csv")
 PLOTS_DIR   = os.path.join(SCRIPT_DIR, "plots")
 os.makedirs(PLOTS_DIR, exist_ok=True)
 
@@ -69,13 +69,12 @@ REGRESSOR_FEATURES = [
     "min_temperature_c",
     "max_temperature_c",
     "temperature_std_c",
-    "temp_last_6h",
-    "temp_volatility",
-    "time_in_danger_zone_pct",
+    "time_above_6c_hours",
+    "time_above_8c_hours",
     "num_temperature_excursions",
     "longest_excursion_hours",
+    "cumulative_temperature_exposure",
     "temperature_trend",
-    "degradation_rate_per_hour",
 ]
 
 CLASSIFIER_FEATURES = REGRESSOR_FEATURES  # identical feature set
@@ -388,6 +387,7 @@ def train_and_export():
         sys.exit(1)
 
     df = pd.read_csv(DATA_PATH)
+    df["is_safe"] = df["safety_status"].apply(lambda x: 1 if x == "SAFE" else 0)
     print(f"\n  ✓ Loaded {len(df):,} rows × {len(df.columns)} columns")
 
     # Validate expected columns

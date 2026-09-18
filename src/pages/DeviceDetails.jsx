@@ -5,10 +5,11 @@ import TemperatureChart from '../components/TemperatureChart';
 import DemoBanner from '../components/DemoBanner';
 import { ArrowLeft, Cpu, Wifi, Thermometer, Send } from 'lucide-react';
 import { formatDateTime, formatTimeOnly, formatDateOnly } from '../utils/dateTime';
+import { postTemperature } from '../api/temperatureApi';
 
 export default function DeviceDetails() {
   const { id } = useParams();
-  const { devices, refrigerators, products, temperatureReadings, postIotReading } = useData();
+  const { devices, refrigerators, products, temperatureReadings, refreshData } = useData();
 
   const device = devices.find(d => d.id === id || d.device_code === id) || devices[0];
   const [testTemp, setTestTemp] = useState(4.2);
@@ -33,8 +34,17 @@ export default function DeviceDetails() {
 
   const handleSimulatePayload = async (e) => {
     e.preventDefault();
-    await postIotReading(device.device_code, Number(testTemp));
-    setTestMsg(`Injected hardware payload: ${testTemp}°C recorded to DB`);
+    try {
+      await postTemperature({
+        device_id: device.device_code,
+        milk_id: assignedProd ? assignedProd.milk_id : null,
+        temperature_c: Number(testTemp)
+      });
+      setTestMsg(`Injected hardware payload: ${testTemp}°C recorded to DB`);
+      if (refreshData) refreshData();
+    } catch (err) {
+      setTestMsg(`Failed to inject payload: ${err.message}`);
+    }
     setTimeout(() => setTestMsg(''), 4000);
   };
 
