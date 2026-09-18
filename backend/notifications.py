@@ -16,11 +16,14 @@ TWILIO_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
 TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER", "")
 
 def send_alert(milk_id: str, current_temp: float, unsafe_prob: float, 
-               target_email: str = "muthuselvanb.24cse@kongu.edu", 
-               target_phone: str = "+918610231943"):
+               target_email: str = None, 
+               target_phone: str = None):
     """
     Sends an Email and SMS alert when a product is predicted to be unsafe.
     """
+    # Fallback to defaults if no recipient is explicitly specified (or if None/empty is passed)
+    target_email = target_email or "muthuselvanb.24cse@kongu.edu"
+    target_phone = target_phone or "+918610231943"
     probability_pct = round(unsafe_prob * 100, 1)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
