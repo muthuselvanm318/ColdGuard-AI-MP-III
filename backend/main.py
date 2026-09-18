@@ -790,6 +790,15 @@ def delete_device(device_id: str):
     finally:
         conn.close()
 
+@app.post("/api/test-sms")
+def test_sms():
+    try:
+        # Pass a mock probability > 0.5 so it triggers the SMS in our existing logic
+        send_alert("MILK-TEST", 15.0, 0.99)
+        return {"success": True, "message": "Test SMS triggered via notifications.py"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 
 # ---------------------------------------------------------
 # MOCK ENDPOINTS FOR EXISTING UI COMPATIBILITY
