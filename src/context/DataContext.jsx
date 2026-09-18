@@ -8,7 +8,6 @@ const DataContext = createContext();
 export function DataProvider({ children }) {
   const [userRole, setUserRole] = useState('ADMIN');
   const [alerts, setAlerts] = useState([]);
-  const [notifications, setNotifications] = useState([]);
 
   // FIX Issue 2: expose products, devices, temperatureReadings
   // so Analytics.jsx (and other pages) can get them from context
@@ -63,6 +62,16 @@ export function DataProvider({ children }) {
     }
   };
 
+  const acknowledgeAllAlerts = async () => {
+    try {
+      const activeAlerts = alerts.filter(a => a.status === 'ACTIVE');
+      await Promise.all(activeAlerts.map(a => api.put(`/api/alerts/${a.id}/acknowledge`)));
+      setAlerts(prev => prev.map(a => a.status === 'ACTIVE' ? { ...a, status: 'ACKNOWLEDGED' } : a));
+    } catch (err) {
+      console.error("Failed to acknowledge all alerts:", err);
+    }
+  };
+
   const resolveAlert = async (id) => {
     try {
       await api.put(`/api/alerts/${id}/resolve`);
@@ -75,8 +84,8 @@ export function DataProvider({ children }) {
   return (
     <DataContext.Provider value={{
       userRole, setUserRole,
-      alerts, notifications,
-      acknowledgeAlert, resolveAlert,
+      alerts,
+      acknowledgeAlert, acknowledgeAllAlerts, resolveAlert,
       // FIX: these were missing and caused Analytics to crash
       products, devices, temperatureReadings,
     }}>

@@ -4,18 +4,18 @@ import { X, CheckCheck, Bell, AlertTriangle, Cpu, Info, ShieldCheck, Mail, Messa
 import { formatDateTime, formatTimeOnly, formatDateOnly } from '../utils/dateTime';
 
 export default function NotificationDrawer({ onClose }) {
-  const { notifications, markAllNotificationsRead } = useData();
+  const { alerts, acknowledgeAllAlerts, acknowledgeAlert } = useData();
   const [filterCategory, setFilterCategory] = useState('ALL');
 
-  const filtered = notifications.filter(n => {
-    if (filterCategory === 'UNREAD') return !n.read_status;
-    if (filterCategory === 'ALERT') return n.category === 'ALERT';
-    if (filterCategory === 'DEVICE') return n.category === 'DEVICE';
-    if (filterCategory === 'SYSTEM') return n.category === 'SYSTEM';
+  const filtered = alerts.filter(n => {
+    if (filterCategory === 'UNREAD') return n.status === 'ACTIVE';
+    if (filterCategory === 'ALERT') return n.type === 'SPOILAGE';
+    if (filterCategory === 'DEVICE') return n.type === 'HARDWARE';
+    if (filterCategory === 'SYSTEM') return n.type === 'SYSTEM';
     return true;
   });
 
-  const unreadCount = notifications.filter(n => !n.read_status).length;
+  const unreadCount = alerts.filter(n => n.status === 'ACTIVE').length;
 
   return (
     <div className="notification-drawer-overlay" onClick={onClose}>
@@ -68,10 +68,10 @@ export default function NotificationDrawer({ onClose }) {
 
         {/* Action Toolbar */}
         <div className="drawer-toolbar">
-          <button className="drawer-action-btn" onClick={markAllNotificationsRead}>
-            <CheckCheck size={15} /> Mark all as read
+          <button className="drawer-action-btn" onClick={acknowledgeAllAlerts}>
+            <CheckCheck size={15} /> Acknowledge active
           </button>
-          <span className="text-xs text-muted">{filtered.length} notification(s)</span>
+          <span className="text-xs text-muted">{filtered.length} alert(s)</span>
         </div>
 
         {/* Notification List */}
@@ -86,21 +86,29 @@ export default function NotificationDrawer({ onClose }) {
             filtered.map((item) => (
               <div 
                 key={item.id} 
-                className={`drawer-notif-card ${!item.read_status ? 'unread-highlight' : ''}`}
+                className={`drawer-notif-card ${item.status === 'ACTIVE' ? 'unread-highlight' : ''}`}
               >
                 <div className="notif-type-icon">
-                  {item.category === 'ALERT' && <AlertTriangle size={18} className="text-warning" />}
-                  {item.category === 'DEVICE' && <Cpu size={18} className="text-info" />}
-                  {item.category === 'SYSTEM' && <Info size={18} className="text-success" />}
+                  {item.type === 'SPOILAGE' && <AlertTriangle size={18} className="text-warning" />}
+                  {item.type === 'HARDWARE' && <Cpu size={18} className="text-info" />}
+                  {item.type !== 'SPOILAGE' && item.type !== 'HARDWARE' && <Info size={18} className="text-success" />}
                 </div>
                 <div className="notif-content">
                   <div className="notif-card-header">
-                    <span className="notif-card-title">{item.title}</span>
+                    <span className="notif-card-title">{item.alert_code || 'Alert'}</span>
                     <span className="notif-card-time">
-                      {formatTimeOnly(item.created_at)}
+                      {item.created_at ? formatTimeOnly(item.created_at) : ''}
                     </span>
                   </div>
                   <p className="notif-card-msg">{item.message}</p>
+                  {item.status === 'ACTIVE' && (
+                    <button 
+                      className="text-xs text-primary mt-2 cursor-pointer hover:underline" 
+                      onClick={() => acknowledgeAlert(item.id)}
+                    >
+                      Acknowledge
+                    </button>
+                  )}
                 </div>
               </div>
             ))

@@ -6,11 +6,10 @@ import {
 import NotificationDrawer from './NotificationDrawer';
 
 export default function Header({ toggleMobileSidebar, isMobileSidebarOpen, openCommandPalette }) {
-  const { notifications, alerts } = useData();
+  const { alerts } = useData();
 
   const [isNotifOpen, setIsNotifOpen] = useState(false);
 
-  const unreadCount = notifications.filter(n => !n.read_status).length;
   const activeAlertsCount = alerts.filter(a => a.status === 'ACTIVE').length;
 
   return (
@@ -63,7 +62,7 @@ export default function Header({ toggleMobileSidebar, isMobileSidebarOpen, openC
           title="Notifications"
         >
           <Bell size={20} />
-          {unreadCount > 0 && <span className="notification-badge">{unreadCount}</span>}
+          {activeAlertsCount > 0 && <span className="notification-badge">{activeAlertsCount}</span>}
         </button>
 
         <div className="profile-placeholder">
