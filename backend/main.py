@@ -319,6 +319,22 @@ def generate_live_prediction(milk_id: str, device_id: str, current_temp: float):
 
         if unsafe_prob > 0.5:
             send_alert(milk_id, current_temp, unsafe_prob)
+            
+            # --- Save to alerts table ---
+            conn_alert = get_db_connection()
+            if conn_alert:
+                try:
+                    c_alert = conn_alert.cursor()
+                    alert_code = f"ALT-{int(datetime.now(timezone.utc).timestamp())}"
+                    c_alert.execute("""
+                        INSERT INTO alerts (alert_code, type, severity, milk_id, device_id, temperature_c, message, status)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (alert_code, "SPOILAGE", "CRITICAL", milk_id, data.get("device_id"), current_temp, f"Product {milk_id} safety breached >50%", "ACTIVE"))
+                    conn_alert.commit()
+                except Exception as e:
+                    print(f"[v2.0] Failed to save alert to database: {e}")
+                finally:
+                    conn_alert.close()
 
         # UPDATED FOR MODEL v2.0: apply temperature threshold safety rules
         # These override the model when temperature is unambiguous
@@ -895,7 +911,48 @@ def reset_settings():
 
 @app.get("/api/alerts")
 def get_alerts():
-    return {"success": True, "data": []}
+    conn = get_db_connection()
+    if not conn:
+        return {"success": False, "message": "DB Error"}
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM alerts ORDER BY created_at DESC LIMIT 100")
+        alerts = cursor.fetchall()
+        return {"success": True, "data": alerts}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+    finally:
+        conn.close()
+
+@app.put("/api/alerts/{alert_id}/acknowledge")
+def acknowledge_alert(alert_id: int):
+    conn = get_db_connection()
+    if not conn:
+        return {"success": False, "message": "DB Error"}
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE alerts SET status = 'ACKNOWLEDGED' WHERE id = %s", (alert_id,))
+        conn.commit()
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+    finally:
+        conn.close()
+
+@app.put("/api/alerts/{alert_id}/resolve")
+def resolve_alert(alert_id: int):
+    conn = get_db_connection()
+    if not conn:
+        return {"success": False, "message": "DB Error"}
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE alerts SET status = 'RESOLVED' WHERE id = %s", (alert_id,))
+        conn.commit()
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+    finally:
+        conn.close()
 
 @app.get("/api/refrigerators")
 def get_refrigerators():

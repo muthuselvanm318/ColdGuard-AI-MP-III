@@ -84,7 +84,7 @@ export default function Alerts() {
                         {a.severity}
                       </span>
                     </td>
-                    <td>{a.product_id || 'UNASSIGNED'}</td>
+                    <td>{a.milk_id || 'UNASSIGNED'}</td>
                     <td><code>{a.device_id}</code></td>
                     <td><strong>{a.temperature_c ? `${a.temperature_c}°C` : 'N/A'}</strong></td>
                     <td className="max-w-xs text-sm">{a.message}</td>

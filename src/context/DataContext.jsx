@@ -39,6 +39,14 @@ export function DataProvider({ children }) {
       } catch {
         // Non-critical — individual pages fetch their own data too
       }
+
+      // Fetch alerts
+      try {
+        const alertsRes = await api.get('/api/alerts');
+        if (mounted && alertsRes?.data) setAlerts(alertsRes.data);
+      } catch (err) {
+        console.error("Failed to load alerts:", err);
+      }
     }
 
     loadGlobalData();
@@ -46,10 +54,29 @@ export function DataProvider({ children }) {
     return () => { mounted = false; clearInterval(iv); };
   }, []);
 
+  const acknowledgeAlert = async (id) => {
+    try {
+      await api.put(`/api/alerts/${id}/acknowledge`);
+      setAlerts(prev => prev.map(a => a.id === id ? { ...a, status: 'ACKNOWLEDGED' } : a));
+    } catch (err) {
+      console.error("Failed to acknowledge alert:", err);
+    }
+  };
+
+  const resolveAlert = async (id) => {
+    try {
+      await api.put(`/api/alerts/${id}/resolve`);
+      setAlerts(prev => prev.map(a => a.id === id ? { ...a, status: 'RESOLVED' } : a));
+    } catch (err) {
+      console.error("Failed to resolve alert:", err);
+    }
+  };
+
   return (
     <DataContext.Provider value={{
       userRole, setUserRole,
       alerts, notifications,
+      acknowledgeAlert, resolveAlert,
       // FIX: these were missing and caused Analytics to crash
       products, devices, temperatureReadings,
     }}>
