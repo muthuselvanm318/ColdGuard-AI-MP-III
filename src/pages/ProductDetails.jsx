@@ -15,7 +15,8 @@ import {
   Thermometer, 
   BrainCircuit, 
   AlertTriangle,
-  Play
+  Play,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function ProductDetails() {
