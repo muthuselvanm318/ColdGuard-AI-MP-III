@@ -11,6 +11,11 @@ from datetime import datetime
 import os
 from dotenv import load_dotenv
 
+try:
+    from backend.notifications import send_alert
+except ImportError:
+    from notifications import send_alert
+
 load_dotenv(os.path.join(os.path.dirname(__file__), '../.env'))
 
 def parse_iso_datetime(dt_str: str) -> str:
@@ -311,6 +316,9 @@ def generate_live_prediction(milk_id: str, device_id: str, current_temp: float):
         safe_prob  = prob_map.get(1, 0.0)    # P(SAFE)
         unsafe_prob= prob_map.get(0, 0.0)    # P(UNSAFE)
         caution_prob = 0.0                   # binary model — always 0 (DB compat)
+
+        if unsafe_prob > 0.5:
+            send_alert(milk_id, current_temp, unsafe_prob)
 
         # UPDATED FOR MODEL v2.0: apply temperature threshold safety rules
         # These override the model when temperature is unambiguous
