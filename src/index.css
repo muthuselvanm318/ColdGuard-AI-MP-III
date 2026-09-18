@@ -1699,3 +1699,396 @@ code {
   }
 }
 
+/* ============================================================
+   Dashboard v2.0 — Two-column asymmetric layout
+   ============================================================ */
+
+/* Outer grid: left (monitoring + table) takes 3fr, right (AI + actions) takes 2fr */
+.db-grid-main {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 20px;
+  margin-top: 20px;
+  align-items: start;
+}
+
+.db-col-left,
+.db-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Card base ──────────────────────────────────────────── */
+.db-card {
+  width: 100%;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.db-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.db-card-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-main);
+}
+
+.db-pill {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-full);
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+/* ── Temperature stat row ───────────────────────────────── */
+.db-temp-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.db-temp-box {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.db-temp-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.db-temp-val {
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+/* ── Trend row ───────────────────────────────────────────── */
+.db-trend-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-glass);
+}
+
+/* ── Chart wrap ──────────────────────────────────────────── */
+.db-chart-wrap {
+  margin-top: 6px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* ── Table ──────────────────────────────────────────────── */
+.db-table-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-glass);
+}
+
+.db-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.db-table th {
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-glass);
+}
+
+.db-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-glass);
+  color: var(--text-main);
+  white-space: nowrap;
+}
+
+.db-table tbody tr:last-child td { border-bottom: none; }
+
+.db-table tbody tr:hover {
+  background: var(--bg-card-hover);
+  transition: background 0.15s;
+}
+
+.db-mono {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  background: var(--bg-subtle);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--primary);
+}
+
+.db-link {
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.db-link:hover { text-decoration: underline; }
+
+.db-see-all {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+.db-see-all:hover { text-decoration: underline; }
+
+/* ── AI Prediction card ─────────────────────────────────── */
+.db-ai-card {
+  border-top: 3px solid var(--purple);
+}
+
+.db-refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-full);
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.db-refresh-btn:hover:not(:disabled) { background: var(--border-glass); }
+.db-refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.db-pred-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+  text-align: center;
+  border: 2px dashed var(--border-glass-bright);
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+}
+
+.db-pred-product-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  padding: 4px 10px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-full);
+  width: fit-content;
+}
+
+.db-pred-shelf-block {
+  padding: 14px 16px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
+  margin-bottom: 14px;
+}
+
+.db-pred-hours {
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: var(--primary);
+  letter-spacing: -0.03em;
+  line-height: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.db-pred-unit {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.db-pred-tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  background: var(--bg-card);
+  border: 1px solid currentColor;
+}
+
+.db-pred-safety-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-glass);
+}
+
+.db-pred-conf-section {
+  padding: 14px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-glass);
+  margin-bottom: 12px;
+}
+
+.db-pred-summary {
+  font-size: 0.82rem;
+  color: var(--text-sub);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.db-pred-timestamp {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  padding-top: 10px;
+  border-top: 1px solid var(--border-glass);
+}
+
+/* ── Quick Actions ──────────────────────────────────────── */
+.db-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.db-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid var(--border-glass);
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+.db-action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-card-hover);
+}
+.db-action-arrow {
+  margin-left: auto;
+  opacity: 0.5;
+  transition: transform 0.2s;
+}
+.db-action-btn:hover .db-action-arrow {
+  opacity: 1;
+  transform: translateX(3px);
+}
+
+.db-action-blue   { background: #EFF6FF; color: #1D4ED8; border-color: #BFDBFE; }
+.db-action-purple { background: #F5F3FF; color: #6D28D9; border-color: #DDD6FE; }
+.db-action-green  { background: #F0FDF4; color: #15803D; border-color: #BBF7D0; }
+.db-action-amber  { background: #FFFBEB; color: #B45309; border-color: #FDE68A; }
+
+/* ── Risk alert pill ────────────────────────────────────── */
+.db-risk-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+}
+
+/* ── Misc ───────────────────────────────────────────────── */
+.db-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  border: 1px dashed var(--border-glass-bright);
+  border-radius: var(--radius-md);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spin { animation: spin 1s linear infinite; }
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 1200px) {
+  .db-grid-main {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .db-grid-main {
+    grid-template-columns: 1fr;
+  }
+  .db-temp-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .db-actions-grid {
+    grid-template-columns: 1fr;
+  }
+  .db-pred-safety-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 540px) {
+  .db-temp-row { grid-template-columns: 1fr 1fr; }
+  .db-pred-hours { font-size: 1.8rem; }
+}
+
