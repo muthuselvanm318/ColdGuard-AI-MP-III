@@ -9,6 +9,7 @@ import numpy as np
 import pickle
 from datetime import datetime, timezone
 import os
+import asyncio
 from dotenv import load_dotenv
 
 try:
@@ -451,6 +452,55 @@ def generate_live_prediction(milk_id: str, device_id: str, current_temp: float):
     except Exception as e:
         print(f"[v2.0] Prediction Pipeline Error for {milk_id}: {e}")
 
+
+# ---------------------------------------------------------
+# SENSOR HEALTH MONITORING
+# ---------------------------------------------------------
+
+async def sensor_health_monitor():
+    """Background task to detect offline sensors."""
+    while True:
+        try:
+            conn = get_db_connection()
+            if conn:
+                cursor = conn.cursor(dictionary=True)
+                
+                cursor.execute("""
+                    SELECT device_id 
+                    FROM devices 
+                    WHERE status = 'ONLINE' 
+                      AND last_seen < NOW() - INTERVAL 15 MINUTE
+                """)
+                offline_devices = cursor.fetchall()
+                
+                for dev in offline_devices:
+                    dev_id = dev['device_id']
+                    
+                    cursor.execute("UPDATE devices SET status = 'OFFLINE' WHERE device_id = %s", (dev_id,))
+                    
+                    cursor.execute("SELECT milk_id FROM milk_products WHERE device_id = %s", (dev_id,))
+                    products = cursor.fetchall()
+                    
+                    for prod in products:
+                        milk_id = prod['milk_id']
+                        cursor.execute("SELECT id FROM predictions WHERE milk_id = %s LIMIT 1", (milk_id,))
+                        has_prediction = cursor.fetchone()
+                        
+                        if has_prediction:
+                            cursor.execute("UPDATE milk_products SET status = 'UNSAFE' WHERE milk_id = %s", (milk_id,))
+                        else:
+                            cursor.execute("UPDATE milk_products SET status = '' WHERE milk_id = %s", (milk_id,))
+                            
+                conn.commit()
+                conn.close()
+        except Exception as e:
+            print(f"Health monitor error: {e}")
+            
+        await asyncio.sleep(60)
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(sensor_health_monitor())
 
 # ---------------------------------------------------------
 # API ENDPOINTS (Core Requirements)
