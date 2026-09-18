@@ -6,6 +6,7 @@ import DeleteConfirmModal from '../components/DeleteConfirmModal';
 import { getProducts, deleteProduct } from '../api/productsApi';
 import { useToast } from '../context/ToastContext';
 import { Package, Plus, Search, Eye, AlertTriangle, Edit2, Trash2 } from 'lucide-react';
+import { formatDateTime, formatTimeOnly, formatDateOnly } from '../utils/dateTime';
 import { Link } from 'react-router-dom';
 
 export default function Products() {
@@ -121,7 +122,7 @@ export default function Products() {
                       <td><strong>{p.milk_id}</strong></td>
                       <td><strong>{p.product_name}</strong></td>
                       <td>{p.milk_type}</td>
-                      <td>{new Date(p.storage_start_time).toLocaleString()}</td>
+                      <td>{formatDateTime(p.storage_start_time)}</td>
                       <td>{p.device_id || 'Unassigned'}</td>
                       <td><SafetyBadge status={p.status} /></td>
                       <td>

@@ -4,6 +4,7 @@ import { useData } from '../context/DataContext';
 import TemperatureChart from '../components/TemperatureChart';
 import DemoBanner from '../components/DemoBanner';
 import { ArrowLeft, Cpu, Wifi, Thermometer, Send } from 'lucide-react';
+import { formatDateTime, formatTimeOnly, formatDateOnly } from '../utils/dateTime';
 
 export default function DeviceDetails() {
   const { id } = useParams();
@@ -80,7 +81,7 @@ export default function DeviceDetails() {
             </div>
             <div className="info-item">
               <span className="info-label">Last Seen</span>
-              <span className="info-value">{new Date(device.last_seen).toLocaleString()}</span>
+              <span className="info-value">{formatDateTime(device.last_seen)}</span>
             </div>
           </div>
         </div>

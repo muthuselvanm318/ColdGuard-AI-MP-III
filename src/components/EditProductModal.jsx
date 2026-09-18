@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, PackagePlus } from 'lucide-react';
+import { formatDateTime, formatTimeOnly, formatDateOnly } from '../utils/dateTime';
 import { updateProduct } from '../api/productsApi';
 import { getDevices } from '../api/devicesApi';
 

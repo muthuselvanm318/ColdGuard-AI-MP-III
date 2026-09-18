@@ -7,7 +7,7 @@ from mysql.connector import Error
 import pandas as pd
 import numpy as np
 import pickle
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 from dotenv import load_dotenv
 
@@ -172,7 +172,7 @@ def calculate_features(milk_id: str, current_temp: float):
     if isinstance(start_time, str):
         start_time = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
 
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     storage_hours = max(0.0, (now - start_time).total_seconds() / 3600.0)
 
     # ── 2. Fetch Temperature History (ASC) ───────────────────────────────
@@ -378,7 +378,7 @@ def generate_live_prediction(milk_id: str, device_id: str, current_temp: float):
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
-                    milk_id, device_id, datetime.now(), current_temp,
+                    milk_id, device_id, datetime.now(timezone.utc), current_temp,
                     shelf_life, status_pred,
                     round(safe_prob, 4), round(caution_prob, 4), round(unsafe_prob, 4),
                     "v2.0",          # UPDATED FOR MODEL v2.0
@@ -394,7 +394,7 @@ def generate_live_prediction(milk_id: str, device_id: str, current_temp: float):
             # Update device heartbeat
             cursor.execute(
                 "UPDATE devices SET last_temperature = %s, last_seen = %s WHERE device_id = %s",
-                (current_temp, datetime.now(), device_id)
+                (current_temp, datetime.now(timezone.utc), device_id)
             )
 
             conn.commit()
@@ -425,7 +425,7 @@ def post_temperature(payload: TemperaturePayload, background_tasks: BackgroundTa
         raise HTTPException(status_code=500, detail="Database connection failed")
         
     try:
-        timestamp = payload.timestamp if payload.timestamp else datetime.now().isoformat()
+        timestamp = payload.timestamp if payload.timestamp else datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
         
         cursor = conn.cursor()
         query = "INSERT INTO temperature_readings (device_id, milk_id, temperature_c, recorded_at) VALUES (%s, %s, %s, %s)"

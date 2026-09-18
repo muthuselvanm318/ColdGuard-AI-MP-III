@@ -18,6 +18,7 @@ import {
   Play,
   ShieldCheck
 } from 'lucide-react';
+import { formatDateTime } from '../utils/dateTime';
 
 export default function ProductDetails() {
   const { id } = useParams(); // Using milk_id
@@ -177,11 +178,11 @@ export default function ProductDetails() {
               </div>
               <div className="info-item">
                 <span className="info-label">Storage Date</span>
-                <span className="info-value"><Calendar size={14} /> {new Date(product.storage_start_time).toLocaleString()}</span>
+                <span className="info-value"><Calendar size={14} /> {formatDateTime(product.storage_start_time)}</span>
               </div>
               <div className="info-item">
                 <span className="info-label">Expiry Date</span>
-                <span className="info-value"><Calendar size={14} /> {new Date(product.expiry_time).toLocaleString()}</span>
+                <span className="info-value"><Calendar size={14} /> {formatDateTime(product.expiry_time)}</span>
               </div>
               <div className="info-item">
                 <span className="info-label">Assigned Sensor</span>
@@ -243,7 +244,7 @@ export default function ProductDetails() {
               <div className="info-item">
                 <span className="info-label">Last Updated</span>
                 <span className="info-value">
-                  {latestTemperature ? new Date(latestTemperature.recorded_at).toLocaleString() : 'N/A'}
+                  {latestTemperature ? formatDateTime(latestTemperature.recorded_at) : 'N/A'}
                 </span>
               </div>
             </div>
@@ -296,7 +297,7 @@ export default function ProductDetails() {
                   }
                   return (
                     <tr key={p.id}>
-                      <td>{new Date(p.predicted_at).toLocaleString()}</td>
+                      <td>{formatDateTime(p.predicted_at)}</td>
                       <td><SafetyBadge status={p.safety_status} /></td>
                       <td>{p.remaining_shelf_life_hours.toFixed(1)}</td>
                       <td>{probs?.SAFE ? (probs.SAFE * 100).toFixed(1) : 0}%</td>

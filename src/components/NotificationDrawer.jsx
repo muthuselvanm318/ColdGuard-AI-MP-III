@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { X, CheckCheck, Bell, AlertTriangle, Cpu, Info, ShieldCheck, Mail, MessageSquare, Send, Trash2 } from 'lucide-react';
+import { formatDateTime, formatTimeOnly, formatDateOnly } from '../utils/dateTime';
 
 export default function NotificationDrawer({ onClose }) {
   const { notifications, markAllNotificationsRead } = useData();
@@ -96,7 +97,7 @@ export default function NotificationDrawer({ onClose }) {
                   <div className="notif-card-header">
                     <span className="notif-card-title">{item.title}</span>
                     <span className="notif-card-time">
-                      {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {formatTimeOnly(item.created_at)}
                     </span>
                   </div>
                   <p className="notif-card-msg">{item.message}</p>

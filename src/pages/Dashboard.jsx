@@ -25,12 +25,13 @@ import {
   Server,
   ArrowRight,
 } from 'lucide-react';
+import { formatDateTime, formatTimeOnly, formatDateOnly } from '../utils/dateTime';
 import { Link } from 'react-router-dom';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 function formatRelativeTime(iso) {
   if (!iso) return '—';
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  const diff = (Date.now() - (new Date(iso.endsWith('Z') ? iso : iso + 'Z').getTime())) / 1000;
   if (diff < 60)  return `${Math.floor(diff)}s ago`;
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   return `${Math.floor(diff / 3600)}h ago`;

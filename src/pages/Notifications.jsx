@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import DemoBanner from '../components/DemoBanner';
 import { Bell, CheckCheck, AlertTriangle, Cpu, Info, Mail, MessageSquare, Send } from 'lucide-react';
+import { formatDateTime, formatTimeOnly, formatDateOnly } from '../utils/dateTime';
 
 export default function Notifications() {
   const { notifications, markAllNotificationsRead } = useData();
@@ -76,7 +77,7 @@ export default function Notifications() {
                 <div className="notif-body-col">
                   <div className="flex-between">
                     <h4 className="notif-title">{n.title}</h4>
-                    <span className="notif-time">{new Date(n.created_at).toLocaleString()}</span>
+                    <span className="notif-time">{formatDateTime(n.created_at)}</span>
                   </div>
                   <p className="notif-desc">{n.message}</p>
                 </div>

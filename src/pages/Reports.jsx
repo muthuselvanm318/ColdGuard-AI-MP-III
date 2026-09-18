@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import DemoBanner from '../components/DemoBanner';
 import { FileText, Download, Printer } from 'lucide-react';
+import { formatDateTime, formatTimeOnly, formatDateOnly } from '../utils/dateTime';
 
 export default function Reports() {
   const { products, refrigerators, devices, alerts, temperatureReadings } = useData();
@@ -114,7 +115,7 @@ export default function Reports() {
                     <td>{r.refrigerator_id || 'REF-001'}</td>
                     <td>{r.product_id || 'MILK-001'}</td>
                     <td><strong>{r.temperature_c}°C</strong></td>
-                    <td>{new Date(r.timestamp).toLocaleString()}</td>
+                    <td>{formatDateTime(r.timestamp)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -140,7 +141,7 @@ export default function Reports() {
                     <td>{p.name}</td>
                     <td>{p.product_type}</td>
                     <td><code>{p.batch_id}</code></td>
-                    <td>{new Date(p.storage_start_date).toLocaleDateString()}</td>
+                    <td>{formatDateOnly(p.storage_start_date)}</td>
                     <td>{p.status}</td>
                   </tr>
                 ))}

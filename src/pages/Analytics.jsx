@@ -3,6 +3,7 @@ import { useData } from '../context/DataContext';
 import TemperatureChart from '../components/TemperatureChart';
 import DemoBanner from '../components/DemoBanner';
 import { BarChart3, Filter, ShieldCheck, Activity, AlertCircle, BrainCircuit, Play, Clock, CheckCircle2 } from 'lucide-react';
+import { formatDateTime, formatTimeOnly, formatDateOnly } from '../utils/dateTime';
 import { forceLivePrediction, getLatestPrediction } from '../api/predictionsApi';
 
 // Normalise prediction across both old and new API shapes
@@ -205,7 +206,7 @@ export default function Analytics() {
                 </div>
               </div>
               <div className="text-xs text-muted mt-3 text-right">
-                Generated at: {predictionResult.prediction_time ? new Date(predictionResult.prediction_time).toLocaleTimeString() : 'Just now'}
+                Generated at: {predictionResult.prediction_time ? formatTimeOnly(predictionResult.prediction_time) : 'Just now'}
               </div>
             </div>
           )}

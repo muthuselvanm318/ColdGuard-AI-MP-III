@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatDateTime, formatTimeOnly, formatDateOnly } from '../utils/dateTime';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -35,7 +36,7 @@ export default function TemperatureChart({ data = [], height = 300, showThreshol
 
   // Format timestamp for chart XAxis
   const chartData = data.map(item => ({
-    time: new Date(item.recorded_at || item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    time: formatTimeOnly(item.recorded_at || item.timestamp),
     temperature: Number(item.temperature_c),
     rawTimestamp: item.recorded_at || item.timestamp
   }));
@@ -65,7 +66,7 @@ export default function TemperatureChart({ data = [], height = 300, showThreshol
             <span className={`tooltip-val font-semibold ${statusClass}`}>{temp} °C</span>
           </div>
           <div className="tooltip-date-sub text-xs text-gray-400 mt-2">
-            {new Date(payload[0].payload.rawTimestamp).toLocaleDateString()}
+            {formatDateOnly(payload[0].payload.rawTimestamp)}
           </div>
         </div>
       );
