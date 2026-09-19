@@ -433,7 +433,7 @@ def generate_live_prediction(milk_id: str, device_id: str, current_temp: float):
 
             # Update device heartbeat
             cursor.execute(
-                "UPDATE devices SET last_temperature = %s, last_seen = %s WHERE device_id = %s",
+                "UPDATE devices SET last_temperature = %s, last_seen = %s, status = 'ONLINE' WHERE device_id = %s",
                 (current_temp, datetime.now(timezone.utc), device_id)
             )
 
