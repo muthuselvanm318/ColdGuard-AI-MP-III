@@ -382,9 +382,7 @@ export default function Dashboard() {
               </button>
             </div>
 
-            <p className="text-xs text-muted" style={{ marginBottom: 14 }}>
-              XGBoost Regressor (RMSE 1.10h) + Random Forest Classifier (99.81% acc) · 21-feature thermal stream
-            </p>
+
 
             {!prediction ? (
               <div className="db-pred-empty">
