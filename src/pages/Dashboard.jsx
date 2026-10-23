@@ -459,6 +459,13 @@ export default function Dashboard() {
                     value={prediction.probabilities?.SAFE   ?? prediction.probabilities?.['1'] ?? 0}
                     color="var(--success)"
                   />
+                  {prediction.probabilities?.CAUTION > 0.001 && (
+                    <ConfBar
+                      label="CAUTION"
+                      value={prediction.probabilities?.CAUTION ?? 0}
+                      color="var(--warning)"
+                    />
+                  )}
                   <ConfBar
                     label="UNSAFE"
                     value={prediction.probabilities?.UNSAFE ?? prediction.probabilities?.['0'] ?? 0}
@@ -476,7 +483,7 @@ export default function Dashboard() {
                 {/* Last updated */}
                 <div className="db-pred-timestamp">
                   <Clock size={12} />
-                  Last updated {formatRelativeTime(predUpdatedAt)} · Model v2.0
+                  Last updated {formatRelativeTime(predUpdatedAt)} · Model v2.1
                 </div>
               </>
             )}

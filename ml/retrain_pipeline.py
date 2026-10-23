@@ -177,19 +177,27 @@ def compute_12_features_from_series(timestamps: pd.DatetimeIndex, temps: np.ndar
 
 
 # ---------------------------------------------------------------------------
-# 2. Food-Safety Ground Truth Labeling (Multi-Criteria Framework)
+# ---------------------------------------------------------------------------
+# 2. Food-Safety Ground Truth Labeling (Microbiological & Kinetic Framework)
 # ---------------------------------------------------------------------------
 def compute_food_safety_labels(feats: dict, timestamps: pd.DatetimeIndex, temps: np.ndarray) -> tuple:
     """
     Computes remaining_shelf_life_hours and safety_status using:
-    1. Spoilage Kinetics (Q10 = 3.0 relative to 4.0°C).
-    2. FDA Food Code 2h/4h Acute Temperature-Abuse Thresholds.
+    1. Spoilage Kinetics (Arrhenius / Q10 = 3.0 relative to 4.0°C).
+    2. Dynamic projected shelf life at the current temperature.
+    3. Multi-criteria Food Code safety rules.
     """
+    cur_t = float(feats['current_temperature_c'])
+    avg_t = float(feats['avg_temperature_c'])
+    t_above_8 = float(feats['time_above_8c_hours'])
+    t_above_6 = float(feats['time_above_6c_hours'])
+    longest_exc = float(feats['longest_excursion_hours'])
+    max_t = float(feats['max_temperature_c'])
+    storage_h = float(feats['storage_hours'])
+
     if len(temps) <= 1:
-        t_val = float(temps[0])
-        dt_h = (timestamps[-1] - timestamps[0]).total_seconds() / 3600.0 if len(timestamps) > 1 else 0.0
-        rate = Q10_FACTOR ** ((t_val - REF_TEMP_C) / 10.0)
-        spoilage = dt_h * rate
+        rate = Q10_FACTOR ** ((cur_t - REF_TEMP_C) / 10.0)
+        spoilage = storage_h * rate
     else:
         time_hours = np.array([(ts - timestamps[0]).total_seconds() / 3600.0 for ts in timestamps])
         dt_hours = np.diff(time_hours)
@@ -197,37 +205,21 @@ def compute_food_safety_labels(feats: dict, timestamps: pd.DatetimeIndex, temps:
         rate_multipliers = Q10_FACTOR ** ((mid_temps - REF_TEMP_C) / 10.0)
         spoilage = float(np.sum(dt_hours * rate_multipliers))
 
-    remaining_hours = max(0.0, round(BASE_SHELF_LIFE_HOURS - spoilage, 2))
+    # Remaining equivalent capacity at 4°C
+    remaining_equiv = max(0.0, BASE_SHELF_LIFE_HOURS - spoilage)
 
-    t_above_8 = feats['time_above_8c_hours']
-    t_above_6 = feats['time_above_6c_hours']
-    longest_exc = feats['longest_excursion_hours']
-    max_t = feats['max_temperature_c']
-    cur_t = feats['current_temperature_c']
-    num_exc = feats['num_temperature_excursions']
+    # Relative deterioration rate multiplier at current temperature
+    rate_curr = Q10_FACTOR ** ((max(1.0, cur_t) - REF_TEMP_C) / 10.0)
 
-    # --- UNSAFE Criteria ---
-    if (
-        remaining_hours <= 0.0 or
-        t_above_8 >= 4.0 or
-        longest_exc >= 4.0 or
-        (max_t >= 15.0 and longest_exc >= 2.0) or
-        (cur_t >= 20.0 and t_above_8 >= 1.0)
-    ):
+    # Real projected hours remaining at current storage condition
+    remaining_hours = min(remaining_equiv, remaining_equiv / rate_curr)
+    remaining_hours = max(0.0, round(remaining_hours, 2))
+
+    # Food safety classification
+    if cur_t > 8.0 or t_above_8 >= 2.0 or remaining_hours <= 24.0 or (max_t >= 15.0 and t_above_8 >= 1.0):
         status = "UNSAFE"
-
-    # --- CAUTION Criteria ---
-    elif (
-        remaining_hours <= SAFE_THRESHOLD_HOURS or
-        t_above_8 >= 1.0 or
-        longest_exc >= 1.0 or
-        t_above_6 >= 8.0 or
-        cur_t >= 7.0 or
-        num_exc >= 2
-    ):
+    elif cur_t > 5.0 or t_above_8 >= 0.5 or remaining_hours <= 72.0 or avg_t > 6.0:
         status = "CAUTION"
-
-    # --- SAFE Criteria ---
     else:
         status = "SAFE"
 
@@ -261,6 +253,7 @@ def process_real_world_data(csv_path: str) -> pd.DataFrame:
     timestamps = pd.DatetimeIndex(df_resampled['timestamp'])
     temps = df_resampled['temperature_c'].to_numpy()
 
+    # 1. Snapshots along the actual recorded cool-down trajectory
     for end_idx in range(10, total_points + 1, 2):
         sub_ts = timestamps[:end_idx]
         sub_temps = temps[:end_idx]
@@ -268,6 +261,27 @@ def process_real_world_data(csv_path: str) -> pd.DataFrame:
         feats = compute_12_features_from_series(sub_ts, sub_temps)
         shelf_life, status = compute_food_safety_labels(feats, sub_ts, sub_temps)
 
+        row = feats.copy()
+        row['remaining_shelf_life_hours'] = shelf_life
+        row['safety_status'] = status
+        records.append(row)
+
+    # 2. Extended steady-state hold profiles based on stabilized real sensor readings
+    stabilized_temp = float(np.mean(temps[-30:]))
+    t0 = timestamps[0]
+    for ext_hours in [3.0, 6.0, 12.0, 24.0, 48.0, 72.0, 96.0, 144.0, 192.0, 240.0, 288.0, 312.0]:
+        num_ext_points = int(ext_hours * 60)
+        ext_ts = [t0 + timedelta(minutes=m) for m in range(num_ext_points)]
+        ext_ts = pd.DatetimeIndex(ext_ts)
+        ext_temps = np.zeros(num_ext_points)
+        real_len = min(len(temps), num_ext_points)
+        ext_temps[:real_len] = temps[:real_len]
+        if num_ext_points > real_len:
+            noise = np.random.normal(0, 0.15, num_ext_points - real_len)
+            ext_temps[real_len:] = stabilized_temp + noise
+
+        feats = compute_12_features_from_series(ext_ts, ext_temps)
+        shelf_life, status = compute_food_safety_labels(feats, ext_ts, ext_temps)
         row = feats.copy()
         row['remaining_shelf_life_hours'] = shelf_life
         row['safety_status'] = status
@@ -288,7 +302,7 @@ def generate_synthetic_trajectory(scenario: int, total_hours: float, dt_minutes:
     temps = np.zeros(num_steps)
 
     if scenario == 0:
-        # a) Compliant refrigeration (2.0°C - 4.5°C with mild compressor cycles)
+        # a) Compliant ideal refrigeration (1.5°C - 4.5°C with mild compressor cycles)
         base_temp = np.random.uniform(2.5, 4.0)
         time_mins = np.arange(num_steps) * dt_minutes
         oscillation = 0.5 * np.sin(2 * np.pi * time_mins / 35.0)
@@ -296,14 +310,14 @@ def generate_synthetic_trajectory(scenario: int, total_hours: float, dt_minutes:
         temps = base_temp + oscillation + noise
 
     elif scenario == 1:
-        # b) Defrost cycles / transient door openings (spikes to 7°C - 12°C)
+        # b) Defrost cycles / transient door openings (spikes to 6.5°C - 9.5°C)
         base_temp = np.random.uniform(3.0, 4.5)
         temps = base_temp + np.random.normal(0, 0.25, num_steps)
         num_spikes = np.random.randint(1, 4)
         for _ in range(num_spikes):
             spike_start = np.random.randint(2, max(3, num_steps - 20))
-            spike_dur_steps = int(np.random.uniform(20, 60) / dt_minutes)
-            spike_peak = np.random.uniform(7.5, 12.0)
+            spike_dur_steps = int(np.random.uniform(15, 45) / dt_minutes)
+            spike_peak = np.random.uniform(6.5, 9.5)
             for s in range(spike_dur_steps):
                 idx = spike_start + s
                 if idx < num_steps:
@@ -311,8 +325,22 @@ def generate_synthetic_trajectory(scenario: int, total_hours: float, dt_minutes:
                     temps[idx] = max(temps[idx], base_temp + pulse)
 
     elif scenario == 2:
-        # c) Complete refrigeration failure (exponential warming to 22°C - 26°C)
-        ambient_temp = np.random.uniform(22.0, 26.0)
+        # c) Caution zone holding (5.2°C - 7.8°C)
+        base_temp = np.random.uniform(5.2, 7.5)
+        time_mins = np.arange(num_steps) * dt_minutes
+        oscillation = 0.6 * np.sin(2 * np.pi * time_mins / 45.0)
+        noise = np.random.normal(0, 0.25, num_steps)
+        temps = base_temp + oscillation + noise
+
+    elif scenario == 3:
+        # d) Significant temperature warning / mild failure (8.5°C - 13.0°C)
+        base_temp = np.random.uniform(8.5, 12.5)
+        noise = np.random.normal(0, 0.35, num_steps)
+        temps = base_temp + noise
+
+    elif scenario == 4:
+        # e) Room temperature exposure / refrigeration failure (18°C - 26°C)
+        ambient_temp = np.random.uniform(20.0, 26.0)
         t0 = np.random.uniform(3.5, 5.0)
         fail_step = np.random.randint(0, max(1, num_steps // 3))
         k_warm = np.random.uniform(0.18, 0.38)
@@ -323,32 +351,33 @@ def generate_synthetic_trajectory(scenario: int, total_hours: float, dt_minutes:
                 elapsed_h = (i - fail_step) * (dt_minutes / 60.0)
                 temps[i] = ambient_temp - (ambient_temp - t0) * math.exp(-k_warm * elapsed_h) + np.random.normal(0, 0.25)
 
-    elif scenario == 3:
-        # d) Transport temperature oscillations (reefer cycles)
-        center_temp = np.random.uniform(4.0, 6.5)
-        amplitude = np.random.uniform(2.0, 3.5)
-        period_hours = np.random.uniform(2.0, 5.0)
-        time_hours = np.arange(num_steps) * (dt_minutes / 60.0)
-        oscillation = amplitude * np.sin(2 * np.pi * time_hours / period_hours)
-        temps = center_temp + oscillation + np.random.normal(0, 0.3, num_steps)
+    elif scenario == 5:
+        # f) Testing warm room exposure (20°C - 28°C short/medium duration)
+        ambient_temp = np.random.uniform(20.0, 26.0)
+        noise = np.random.normal(0, 0.3, num_steps)
+        temps = ambient_temp + noise
 
     temps = np.clip(temps, 0.5, 35.0)
     return timestamps, temps
 
 
-def generate_synthetic_dataset(num_samples: int = 4000) -> pd.DataFrame:
+def generate_synthetic_dataset(num_samples: int = 5000) -> pd.DataFrame:
     print(f"Generating {num_samples} thermodynamic synthetic cold-chain samples...")
     records = []
-    scenarios = np.random.choice([0, 1, 2, 3], size=num_samples, p=[0.35, 0.30, 0.20, 0.15])
+    scenarios = np.random.choice([0, 1, 2, 3, 4, 5], size=num_samples, p=[0.30, 0.20, 0.15, 0.15, 0.10, 0.10])
 
     for i in range(num_samples):
         scen = scenarios[i]
-        if random.random() < 0.30:
-            storage_h = np.random.uniform(0.5, 24.0)
-        elif random.random() < 0.70:
-            storage_h = np.random.uniform(24.0, 180.0)
+        if scen == 5:
+            # Short to medium room temp test exposure (0.2h to 24.0h)
+            storage_h = np.random.uniform(0.2, 24.0)
         else:
-            storage_h = np.random.uniform(180.0, 380.0)
+            if random.random() < 0.35:
+                storage_h = np.random.uniform(0.5, 24.0)
+            elif random.random() < 0.70:
+                storage_h = np.random.uniform(24.0, 168.0)
+            else:
+                storage_h = np.random.uniform(168.0, 336.0)
 
         dt = 2.0 if storage_h <= 24.0 else 5.0
         ts, temps = generate_synthetic_trajectory(scen, storage_h, dt_minutes=dt)

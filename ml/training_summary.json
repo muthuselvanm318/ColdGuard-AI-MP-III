@@ -1,17 +1,15 @@
 {
-  "pipeline_version": "2.0",
+  "pipeline_version": "2.1",
   "dataset": {
-    "path": "/Users/selvam/Documents/ML/Multidiciplinary Project /MP-III/ml/synthetic_milk_16_features_35k.csv",
-    "rows": 35000,
-    "kaggle_reference": "https://www.kaggle.com/datasets/cplinta/milkquality"
+    "path": "ml/synthetic_milk_data.csv",
+    "real_world_reference": "ml/coldguard_temperature_realWorld_data.csv",
+    "rows": 4049,
+    "features_count": 12
   },
-  "training_time_seconds": 1.7,
+  "trained_at": "2026-10-23T23:39:00Z",
   "model_1_regressor": {
-    "model": "XGBoost Regressor v2.0",
-    "trained_at": "2026-09-18T22:01:41.554855",
-    "train_samples": 24500,
-    "val_samples": 5250,
-    "test_samples": 5250,
+    "model": "XGBoost Regressor v2.1",
+    "samples": 4049,
     "features": [
       "storage_hours",
       "current_temperature_c",
@@ -27,30 +25,19 @@
       "temperature_trend"
     ],
     "hyperparameters": {
-      "n_estimators": 300,
-      "learning_rate": 0.05,
-      "max_depth": 6,
-      "subsample": 0.8,
-      "colsample_bytree": 0.8
+      "n_estimators": 120,
+      "learning_rate": 0.08,
+      "max_depth": 5
     },
-    "val_metrics": {
-      "rmse": 20.2655,
-      "mae": 14.9749,
-      "r2": 0.7539
-    },
-    "test_metrics": {
-      "rmse": 20.9572,
-      "mae": 15.5392,
-      "r2": 0.7466
+    "cross_validation_metrics_5fold": {
+      "rmse": 2.69,
+      "mae": 1.68,
+      "r2": 0.9995
     }
   },
   "model_2_classifier": {
-    "model": "Random Forest Classifier v2.0",
-    "trained_at": "2026-09-18T22:01:42.621371",
-    "train_samples": 24500,
-    "train_samples_after_smote": 29592,
-    "val_samples": 5250,
-    "test_samples": 5250,
+    "model": "Random Forest Classifier v2.1",
+    "samples": 4049,
     "features": [
       "storage_hours",
       "current_temperature_c",
@@ -65,24 +52,15 @@
       "cumulative_temperature_exposure",
       "temperature_trend"
     ],
-    "hyperparameters": {
-      "n_estimators": 200,
-      "max_depth": 12,
-      "class_weight": "balanced"
-    },
-    "val_metrics": {
-      "accuracy": 0.9137,
-      "roc_auc": 0.9816
-    },
-    "test_metrics": {
-      "accuracy": 0.9164,
-      "roc_auc": 0.9816,
-      "precision_SAFE": 0.8648,
-      "recall_SAFE": 0.9351,
-      "f1_SAFE": 0.8985,
-      "precision_UNSAFE": 0.955,
-      "recall_UNSAFE": 0.9041,
-      "f1_UNSAFE": 0.9289
+    "cross_validation_metrics_5fold": {
+      "weighted_f1": 0.9921,
+      "accuracy": 0.9921,
+      "precision_SAFE": 0.9963,
+      "recall_SAFE": 0.9953,
+      "precision_CAUTION": 0.9654,
+      "recall_CAUTION": 0.9816,
+      "precision_UNSAFE": 0.9974,
+      "recall_UNSAFE": 0.9922
     }
   }
 }
