@@ -23,6 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 .venv/
+venv/
+backend/venv/
 node_modules/
 dist/
 .vite/

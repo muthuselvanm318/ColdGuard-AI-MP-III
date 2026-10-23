@@ -19,6 +19,11 @@ except ImportError:
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '../.env'))
 
+try:
+    from .notifications import notification_router, trigger_notifications
+except ImportError:
+    from notifications import notification_router, trigger_notifications
+
 def parse_iso_datetime(dt_str: str) -> str:
     if not dt_str:
         return None
@@ -35,6 +40,8 @@ def parse_iso_datetime(dt_str: str) -> str:
 
 app = FastAPI(title="ColdGuard AI API")
 
+app.include_router(notification_router)
+
 # Setup CORS for Vite proxy or direct access
 app.add_middleware(
     CORSMiddleware,
@@ -45,25 +52,19 @@ app.add_middleware(
 )
 
 # ── Load ML Models (v2.0) ───────────────────────────────────────────────────
-# UPDATED FOR MODEL v2.0: added label_encoder.pkl load
-xgb_model    = None
-rf_model     = None
-label_encoder = None
+xgb_model = None
+rf_model = None
+
 try:
     _ml_dir   = os.path.join(os.path.dirname(__file__), '../ml')
     xgb_path  = os.path.join(_ml_dir, 'xgboost_shelf_life_model.pkl')
     rf_path   = os.path.join(_ml_dir, 'random_forest_safety_model.pkl')
-    le_path   = os.path.join(_ml_dir, 'label_encoder.pkl')
 
     with open(xgb_path, 'rb') as f:
         xgb_model = pickle.load(f)
     with open(rf_path, 'rb') as f:
         rf_model = pickle.load(f)
-    # UPDATED FOR MODEL v2.0: label encoder maps binary classes 0/1 → UNSAFE/SAFE
-    if os.path.exists(le_path):
-        with open(le_path, 'rb') as f:
-            label_encoder = pickle.load(f)
-    print("[v2.0] Successfully loaded XGBoost, Random Forest, and LabelEncoder.")
+    print("Successfully loaded XGBoost and Random Forest models.")
 except Exception as e:
     print(f"Warning: ML models could not be loaded. Ensure they are trained. Error: {e}")
 
@@ -150,158 +151,161 @@ _REFERENCE_TEMP = 4.0
 def calculate_features(milk_id: str, current_temp: float):
     """
     Fetches historical temperature data for the given milk_id and computes
-    all 21 features required by the v2.0 ML models.
-
-    New vs v1.0 (9 added):
-      hour_of_day, day_of_week, is_weekend,
-      temp_last_1h, temp_last_3h, temp_last_6h, temp_volatility,
-      time_in_danger_zone_pct, degradation_rate_per_hour
+    all 12 physical features required by the retrained ML models.
     """
     conn = get_db_connection()
-    if not conn:
-        raise Exception("Database unavailable")
-
-    cursor = conn.cursor(dictionary=True)
-
-    # ── 1. Fetch Product Start Time ──────────────────────────────────────
-    cursor.execute(
-        "SELECT storage_start_time FROM milk_products WHERE milk_id = %s",
-        (milk_id,)
-    )
-    product = cursor.fetchone()
-    if not product:
-        conn.close()
-        raise Exception(f"Product not found: {milk_id}")
-
-    start_time = product['storage_start_time']
-    if isinstance(start_time, str):
-        try:
-            start_time = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-        except Exception:
-            raise Exception("Invalid storage_start_time")
-            
-    if start_time.tzinfo is None:
-        start_time = start_time.replace(tzinfo=timezone.utc)
-    else:
-        start_time = start_time.astimezone(timezone.utc)
-
     now = datetime.now(timezone.utc)
-    storage_hours = max(0.0, (now - start_time).total_seconds() / 3600.0)
-
-    # ── 2. Fetch Temperature History (ASC) ───────────────────────────────
-    cursor.execute(
-        "SELECT temperature_c, recorded_at FROM temperature_readings "
-        "WHERE milk_id = %s ORDER BY recorded_at ASC",
-        (milk_id,)
-    )
-    readings = cursor.fetchall()
-    conn.close()
-
-    temps = [float(r['temperature_c']) for r in readings]
-    if not temps:
-        temps = [current_temp]
+    storage_hours = 1.0
+    temps = [float(current_temp)]
+    timestamps = [now]
+    
+    if conn:
+        try:
+            cursor = conn.cursor(dictionary=True)
+            # 1. Fetch Product Start Time
+            cursor.execute("SELECT storage_start_time FROM milk_products WHERE milk_id = %s", (milk_id,))
+            product = cursor.fetchone()
+            if product and product.get('storage_start_time'):
+                start_time = product['storage_start_time']
+                if isinstance(start_time, str):
+                    try:
+                        start_time = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                    except Exception:
+                        start_time = now
+                if start_time.tzinfo is None:
+                    start_time = start_time.replace(tzinfo=timezone.utc)
+                else:
+                    start_time = start_time.astimezone(timezone.utc)
+                storage_hours = max(0.0, (now - start_time).total_seconds() / 3600.0)
+                
+            # 2. Fetch Temperature History
+            cursor.execute("SELECT temperature_c, recorded_at FROM temperature_readings WHERE milk_id = %s ORDER BY recorded_at ASC", (milk_id,))
+            readings = cursor.fetchall()
+            if readings and len(readings) > 0:
+                temps = [float(r['temperature_c']) for r in readings]
+                timestamps = []
+                for r in readings:
+                    rec = r['recorded_at']
+                    if isinstance(rec, str):
+                        try:
+                            rec = datetime.fromisoformat(rec.replace("Z", "+00:00"))
+                        except Exception:
+                            rec = now
+                    if rec.tzinfo is None:
+                        rec = rec.replace(tzinfo=timezone.utc)
+                    else:
+                        rec = rec.astimezone(timezone.utc)
+                    timestamps.append(rec)
+        except Exception as db_err:
+            print(f"Notice: calculate_features DB fetch skipped ({db_err}), using current reading.")
+        finally:
+            conn.close()
 
     temps_array = np.array(temps)
-    n = len(temps)
+    feat_current_temp = float(current_temp)
+    feat_min_temp = float(np.min(temps_array))
+    feat_max_temp = float(np.max(temps_array))
+    feat_std_temp = float(np.std(temps_array, ddof=1)) if len(temps_array) > 1 else 0.0
 
-    # ── 3. Classic statistics (same as v1) ───────────────────────────────
-    avg_temp = float(np.mean(temps_array))
-    min_temp = float(np.min(temps_array))
-    max_temp = float(np.max(temps_array))
-    std_temp = float(np.std(temps_array)) if n > 1 else 0.0
-    cumulative = float(np.sum(temps_array))
-
-    # Excursion stats (>8 °C)
-    above_6 = sum(1 for t in temps if t > 6.0)
-    above_8 = sum(1 for t in temps if t > 8.0)
-
-    longest_excursion = 0
-    current_excursion = 0
-    num_excursions    = 0
-    in_excursion      = False
-    for t in temps:
-        if t > 8.0:
-            current_excursion += 1
-            if not in_excursion:
+    # Calculate time array in hours relative to first reading
+    if len(timestamps) > 1:
+        t0 = timestamps[0]
+        time_hours = np.array([(ts - t0).total_seconds() / 3600.0 for ts in timestamps])
+        dt_hours = np.diff(time_hours)
+        mid_temps = (temps_array[:-1] + temps_array[1:]) / 2.0
+        
+        # Integration for cumulative thermal exposure (degree-hours)
+        trapz_fn = getattr(np, 'trapezoid', getattr(np, 'trapz', None))
+        cumulative = float(trapz_fn(temps_array, time_hours)) if trapz_fn else float(np.sum(mid_temps * dt_hours))
+        cumulative = max(0.0, cumulative)
+        
+        avg_temp = cumulative / max(0.001, time_hours[-1]) if time_hours[-1] > 0 else float(current_temp)
+        
+        time_above_6 = float(np.sum(dt_hours[mid_temps > 6.0])) if len(dt_hours) > 0 else 0.0
+        time_above_8 = float(np.sum(dt_hours[mid_temps > 8.0])) if len(dt_hours) > 0 else 0.0
+        
+        # Excursions > 8.0°C lasting >= 5 mins (0.0833 hours)
+        num_excursions = 0
+        longest_excursion = 0.0
+        cur_excursion = 0.0
+        in_excursion = False
+        
+        for t_val, dt in zip(mid_temps, dt_hours):
+            if t_val > 8.0:
+                cur_excursion += dt
+                if not in_excursion:
+                    in_excursion = True
+            else:
+                if in_excursion:
+                    if cur_excursion >= (5.0 / 60.0):
+                        num_excursions += 1
+                    if cur_excursion > longest_excursion:
+                        longest_excursion = cur_excursion
+                    cur_excursion = 0.0
+                    in_excursion = False
+        if in_excursion:
+            if cur_excursion >= (5.0 / 60.0):
                 num_excursions += 1
-                in_excursion = True
+            if cur_excursion > longest_excursion:
+                longest_excursion = cur_excursion
+                
+        # Temperature Trend (°C / hour)
+        cutoff = time_hours[-1] - 0.25 # last 15 mins
+        recent_mask = time_hours >= cutoff
+        if np.sum(recent_mask) < 2:
+            t_slice = time_hours[-min(5, len(time_hours)):]
+            y_slice = temps_array[-min(5, len(temps_array)):]
         else:
-            if current_excursion > longest_excursion:
-                longest_excursion = current_excursion
-            current_excursion = 0
-            in_excursion = False
-    if current_excursion > longest_excursion:
-        longest_excursion = current_excursion
-
-    # Trend: slope of last 5 readings
-    if n >= 5:
-        trend = float(np.polyfit(range(5), temps[-5:], 1)[0])
+            t_slice = time_hours[recent_mask]
+            y_slice = temps_array[recent_mask]
+            
+        span = t_slice[-1] - t_slice[0]
+        trend = float(np.polyfit(t_slice, y_slice, 1)[0]) if span > 1e-6 else 0.0
     else:
+        cumulative = float(current_temp) * max(0.001, storage_hours)
+        avg_temp = float(current_temp)
+        time_above_6 = max(0.0, storage_hours) if current_temp > 6.0 else 0.0
+        time_above_8 = max(0.0, storage_hours) if current_temp > 8.0 else 0.0
+        num_excursions = 1 if (current_temp > 8.0 and storage_hours >= (5.0 / 60.0)) else 0
+        longest_excursion = storage_hours if current_temp > 8.0 else 0.0
         trend = 0.0
 
-    # ── 4. NEW temporal features (v2.0) ──────────────────────────────────
-    hour_of_day = now.hour
-    day_of_week = now.weekday()          # 0=Mon … 6=Sun
-    is_weekend  = int(day_of_week >= 5)
-
-    # Rolling lag averages
-    temp_last_1h = float(np.mean(temps[-1:]))
-    temp_last_3h = float(np.mean(temps[-3:])) if n >= 3 else temp_last_1h
-    temp_last_6h = float(np.mean(temps[-6:])) if n >= 6 else temp_last_1h
-
-    # Rolling volatility (std of last 6 readings)
-    temp_volatility = float(np.std(temps[-6:])) if n >= 6 else 0.0
-
-    # Danger zone percentage (%  of time above 8 °C)
-    time_in_danger_zone_pct = round(above_8 / max(1, n) * 100.0, 4)
-
-    # Cumulative spoilage via Q10 kinetics → degradation rate per hour
-    spoilage_consumed = sum(
-        _Q10_FACTOR ** ((t - _REFERENCE_TEMP) / 10.0) for t in temps
-    )
-    degradation_rate_per_hour = round(
-        spoilage_consumed / max(1.0, storage_hours), 6
-    )
-
-    # ── 5. Assemble full 12-feature dict ─────────────────────────────────
     features = {
-        'storage_hours':                  storage_hours,
-        'current_temperature_c':          current_temp,
-        'avg_temperature_c':              avg_temp,
-        'min_temperature_c':              min_temp,
-        'max_temperature_c':              max_temp,
-        'temperature_std_c':              std_temp,
-        'time_above_6c_hours':            above_6,
-        'time_above_8c_hours':            above_8,
-        'num_temperature_excursions':     num_excursions,
-        'longest_excursion_hours':        longest_excursion,
-        'cumulative_temperature_exposure': cumulative,
-        'temperature_trend':              trend,
+        'storage_hours': round(storage_hours, 4),
+        'current_temperature_c': round(feat_current_temp, 2),
+        'avg_temperature_c': round(avg_temp, 2),
+        'min_temperature_c': round(feat_min_temp, 2),
+        'max_temperature_c': round(feat_max_temp, 2),
+        'temperature_std_c': round(feat_std_temp, 4),
+        'time_above_6c_hours': round(time_above_6, 4),
+        'time_above_8c_hours': round(time_above_8, 4),
+        'num_temperature_excursions': int(num_excursions),
+        'longest_excursion_hours': round(longest_excursion, 4),
+        'cumulative_temperature_exposure': round(cumulative, 4),
+        'temperature_trend': round(trend, 4)
     }
     return features
 
 
 def generate_live_prediction(milk_id: str, device_id: str, current_temp: float):
     """
-    UPDATED FOR MODEL v2.0:
-    - Uses 21 features (9 new temporal features added)
-    - RF model is now binary: classes are int 0 (UNSAFE) and 1 (SAFE)
-    - Safety label derived from temp threshold rules + model confidence
-    - caution_probability always 0.0 (binary model, DB col kept for compatibility)
-    - model_version stored as 'v2.0'
+    ML Prediction Pipeline:
+    - Calculates 12 features for the retrained models
+    - Computes continuous remaining shelf life (XGBoost Regressor)
+    - Predicts safety classification status & probabilities (Random Forest: SAFE, CAUTION, UNSAFE)
+    - Persists results to predictions, milk_products, and devices
+    - Dispatches instant multi-channel alerts (ntfy push, Twilio SMS, Email, FCM)
     """
     if not xgb_model or not rf_model:
         print("[v2.0] Models not loaded. Cannot predict.")
         return
 
     try:
-        # ── Step 1: Compute all 21 features ──────────────────────────────
+        # Step 1: Compute 12 features
         feat_dict = calculate_features(milk_id, current_temp)
-
-        # UPDATED FOR MODEL v2.0: use the full 21-feature ordered list
         df_features = pd.DataFrame([feat_dict], columns=MODEL_FEATURE_ORDER)
 
-        # ── Step 2: Shelf life prediction (XGBoost Regressor) ────────────
+        # Step 2: Shelf life prediction (XGBoost Regressor)
         shelf_life_preds = xgb_model.predict(df_features)
         shelf_life = float(max(0.0, shelf_life_preds[0]))
         shelf_life_days = round(shelf_life / 24.0, 2)
@@ -318,127 +322,111 @@ def generate_live_prediction(milk_id: str, device_id: str, current_temp: float):
         else:
             status_tag = "EXPIRED"
 
-        # ── Step 3: Safety classification (Random Forest — binary) ───────
-        # UPDATED FOR MODEL v2.0: RF classes are integers 0=UNSAFE, 1=SAFE
-        raw_pred  = rf_model.predict(df_features)[0]      # int 0 or 1
-        raw_probs = rf_model.predict_proba(df_features)[0] # [P(0), P(1)]
-        classes   = list(rf_model.classes_)                # [0, 1]
+        # Step 3: Safety classification (Random Forest)
+        status_pred = rf_model.predict(df_features)[0]
+        status_probs = rf_model.predict_proba(df_features)[0]
+        classes = list(rf_model.classes_)
+        prob_dict = {cls: float(prob) for cls, prob in zip(classes, status_probs)}
+        
+        safe_prob = prob_dict.get("SAFE", 0.0)
+        caution_prob = prob_dict.get("CAUTION", 0.0)
+        unsafe_prob = prob_dict.get("UNSAFE", 0.0)
+        confidence = safe_prob if status_pred == "SAFE" else (unsafe_prob if status_pred == "UNSAFE" else caution_prob)
 
-        prob_map   = {cls: float(prob) for cls, prob in zip(classes, raw_probs)}
-        safe_prob  = prob_map.get(1, 0.0)    # P(SAFE)
-        unsafe_prob= prob_map.get(0, 0.0)    # P(UNSAFE)
-        caution_prob = 0.0                   # binary model — always 0 (DB compat)
-
-        # UPDATED FOR MODEL v2.0: apply temperature threshold safety rules
-        # These override the model when temperature is unambiguous
-        if current_temp >= 8.0:
-            status_pred = "UNSAFE"
-            is_safe_flag = 0
-        elif current_temp <= 5.0:
-            status_pred = "SAFE"
-            is_safe_flag = 1
-        else:
-            # Borderline 5–8 °C: trust model output, tie-break by shelf life
-            if raw_pred == 1 and shelf_life > 72:
-                status_pred  = "SAFE"
-                is_safe_flag = 1
-            else:
-                status_pred  = "UNSAFE"
-                is_safe_flag = 0
-
-        confidence = safe_prob if status_pred == "SAFE" else unsafe_prob
-
-        # ── Step 4: Alert level for dashboard ────────────────────────────
+        # Step 4: Alert level for dashboard
         if status_pred == "UNSAFE" and confidence >= 0.95:
             alert_level = "critical"
             status_color = "#7f1d1d"
-        elif status_pred == "UNSAFE" and confidence >= 0.80:
+        elif status_pred == "UNSAFE":
             alert_level = "danger"
             status_color = "#ef4444"
-        elif status_pred == "SAFE" and shelf_life <= 24:
+        elif status_pred == "CAUTION":
             alert_level = "warning"
             status_color = "#f59e0b"
-        elif status_pred == "SAFE" and shelf_life <= 72:
+        elif shelf_life <= 72:
             alert_level = "info"
             status_color = "#3b82f6"
         else:
             alert_level = "none"
             status_color = "#22c55e"
 
-        badge_text  = "✓ Good Condition" if status_pred == "SAFE" else "⚠ Unsafe"
+        badge_text = "✓ Good Condition" if status_pred == "SAFE" else ("⚠ Caution" if status_pred == "CAUTION" else "🚨 Unsafe")
         summary_msg = (
             f"Milk is safely stored. ~{shelf_life_days} days remaining."
             if status_pred == "SAFE"
-            else f"Temperature breach detected. Shelf life: {shelf_life:.1f}h."
+            else (f"Caution: storage conditions degraded. Shelf life: {shelf_life:.1f}h."
+                  if status_pred == "CAUTION"
+                  else f"Temperature abuse / spoilage detected! Current: {current_temp}°C. Shelf life: {shelf_life:.1f}h.")
         )
 
-        if unsafe_prob > 0.5:
-            # Check if there's already an active alert for this milk_id to prevent SMS spam
-            conn_alert = get_db_connection()
-            should_alert = True
-            if conn_alert:
-                try:
-                    c_alert = conn_alert.cursor(dictionary=True)
-                    c_alert.execute("SELECT id FROM alerts WHERE milk_id = %s AND status = 'ACTIVE' LIMIT 1", (milk_id,))
-                    if c_alert.fetchone():
-                        should_alert = False
-                except Exception:
-                    pass
-            
-            if should_alert:
-                send_alert(milk_id, current_temp, unsafe_prob)
-                
-                # --- Save to alerts table ---
-                if conn_alert:
+        # Step 5: Persist prediction to database
+        now_utc = datetime.now(timezone.utc)
+        conn = get_db_connection()
+        if conn:
+            try:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO predictions
+                    (milk_id, device_id, prediction_time, current_temperature_c,
+                     remaining_shelf_life_hours, safety_status, safe_probability,
+                     caution_probability, unsafe_probability, model_version)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        milk_id, device_id, now_utc, current_temp,
+                        shelf_life, status_pred,
+                        round(safe_prob, 4), round(caution_prob, 4), round(unsafe_prob, 4),
+                        "v2.0",
+                    )
+                )
+
+                # Update product status
+                cursor.execute(
+                    "UPDATE milk_products SET status = %s WHERE milk_id = %s",
+                    (status_pred, milk_id)
+                )
+
+                # Update device heartbeat
+                cursor.execute(
+                    "UPDATE devices SET last_temperature = %s, last_seen = %s, status = 'ONLINE' WHERE device_id = %s",
+                    (current_temp, now_utc, device_id)
+                )
+
+                # Save to alerts table if UNSAFE
+                if status_pred == "UNSAFE":
                     try:
-                        c_alert = conn_alert.cursor()
-                        alert_code = f"ALT-{int(datetime.now(timezone.utc).timestamp())}"
-                        c_alert.execute("""
+                        alert_code = f"ALT-{int(now_utc.timestamp())}"
+                        cursor.execute("""
                             INSERT INTO alerts (alert_code, type, severity, milk_id, device_id, temperature_c, message, status)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         """, (alert_code, "SPOILAGE", "CRITICAL", milk_id, device_id, current_temp, summary_msg, "ACTIVE"))
-                        conn_alert.commit()
-                    except Exception as e:
-                        print(f"[v2.0] Failed to save alert to database: {e}")
-            if conn_alert:
-                conn_alert.close()
+                    except Exception as alt_err:
+                        pass
 
-        # ── Step 5: Persist to database ───────────────────────────────────
-        conn = get_db_connection()
-        if conn:
-            cursor = conn.cursor()
+                conn.commit()
+            except Exception as db_err:
+                print(f"[v2.0] Prediction DB save error (non-fatal): {db_err}")
+            finally:
+                conn.close()
 
-            # Insert prediction row (caution_probability=0 for binary compat)
-            cursor.execute(
-                """
-                INSERT INTO predictions
-                (milk_id, device_id, prediction_time, current_temperature_c,
-                 remaining_shelf_life_hours, safety_status, safe_probability,
-                 caution_probability, unsafe_probability, model_version)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """,
-                (
-                    milk_id, device_id, datetime.now(timezone.utc), current_temp,
-                    shelf_life, status_pred,
-                    round(safe_prob, 4), round(caution_prob, 4), round(unsafe_prob, 4),
-                    "v2.0",          # UPDATED FOR MODEL v2.0
-                )
-            )
+        # Step 6: Dispatch Alerts (ntfy Push, Twilio SMS, Email, FCM)
+        try:
+            trigger_notifications(milk_id, device_id, current_temp, status_pred)
+        except Exception as notif_err:
+            print(f"[v2.0] Error triggering notifications: {notif_err}")
 
-            # Update product status (SAFE / UNSAFE; CAUTION kept in ENUM for compat)
-            cursor.execute(
-                "UPDATE milk_products SET status = %s WHERE milk_id = %s",
-                (status_pred, milk_id)
-            )
+        # Step 7: Log dashboard-ready summary
+        print(
+            f"[v2.0 Prediction] {milk_id} | "
+            f"Temp={current_temp}°C | "
+            f"ShelfLife={shelf_life:.1f}h ({status_tag}) | "
+            f"Safety={status_pred} (conf={confidence:.2%}) | "
+            f"Alert={alert_level}"
+        )
 
-            # Update device heartbeat
-            cursor.execute(
-                "UPDATE devices SET last_temperature = %s, last_seen = %s, status = 'ONLINE' WHERE device_id = %s",
-                (current_temp, datetime.now(timezone.utc), device_id)
-            )
-
-            conn.commit()
-            conn.close()
+    except Exception as e:
+        print(f"[v2.0] Prediction Pipeline Error for {milk_id}: {e}")
 
         # ── Step 6: Log dashboard-ready summary ──────────────────────────
         print(

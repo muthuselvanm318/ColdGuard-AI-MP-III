@@ -1,118 +1,324 @@
-#include <ArduinoJson.h> // Ensure you have ArduinoJson library installed
-#include <DallasTemperature.h>
-#include <HTTPClient.h>
-#include <OneWire.h>
+#define BLYNK_TEMPLATE_ID "TMPL3oZOG6zPE"
+#define BLYNK_TEMPLATE_NAME "Cold Guard AI"
+#define BLYNK_AUTH_TOKEN "966vu-6Q-NkEec00tYG-qY6jH8SG9XiI"
+
 #include <WiFi.h>
-#include <time.h>
+#include <BlynkSimpleEsp32.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
 
-// -----------------------------------------
-// Configuration Details
-// -----------------------------------------
-const char *ssid = "Unknown";
-const char *password = "04072007";
+// ---------------------------------------------------------------------------
+// Network & Cloud Configuration
+// ---------------------------------------------------------------------------
+char ssid[] = "Unknown";
+char pass[] = "04072007";
 
-// Backend API URL (Update with actual IP of the backend server)
-const char *serverName =
-    "https://coldguard-ai-aubh.onrender.com/api/temperature";
+#define ONE_WIRE_BUS 4
 
-// Device & Product Identifiers
-const String DEVICE_ID = "ESP32_01";
-const String MILK_ID =
-    "MILK_0001"; // The batch of milk currently being monitored
+// ---------------------------------------------------------------------------
+// CLOUD / VERCEL API CONFIGURATION
+// ---------------------------------------------------------------------------
+// ⚠️ REPLACE THIS with your actual Vercel or cloud backend domain:
+// Example: "https://coldguard-ai.vercel.app/api/temperature"
+// Or if hosted on Render/Railway: "https://coldguard-backend.onrender.com/api/temperature"
+const char* cloudApiUrl = "https://YOUR-VERCEL-DOMAIN.vercel.app/api/temperature";
 
-// GPIO where the DS18B20 is connected to
-const int oneWireBus = 4;
+// Tracking IDs (Must match registered products in your cloud database)
+const char* DEVICE_ID = "ESP32_01";
+const char* MILK_ID   = "MILK_0001";
 
-// NTP Server for timestamp
-const char *ntpServer = "pool.ntp.org";
-const long gmtOffset_sec = 0;
-const int daylightOffset_sec = 3600;
+// Interval to send data to the Cloud API (in milliseconds)
+// 10000L = 10 seconds, 30000L = 30 seconds
+const unsigned long CLOUD_POST_INTERVAL_MS = 10000L;
 
-// Setup a oneWire instance
-OneWire oneWire(oneWireBus);
-
-// Pass our oneWire reference to Dallas Temperature sensor
+// ---------------------------------------------------------------------------
+// Global Objects & State
+// ---------------------------------------------------------------------------
+OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
 
-void setup() {
-  Serial.begin(115200);
+BlynkTimer timer;
 
-  // Start the DS18B20 sensor
-  sensors.begin();
+float currentTemperature = 0.0;
+String safetyStatus = "UNKNOWN";
 
-  // Connect to Wi-Fi
-  WiFi.begin(ssid, password);
-  Serial.println("Connecting to WiFi...");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+// ---------------------------------------------------------------------------
+// Secure HTTPS Cloud Transmission Function (Vercel / AWS / Render Compatible)
+// ---------------------------------------------------------------------------
+void sendDataToCloud(float tempC)
+{
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.println("[Cloud API] WiFi disconnected. Skipping upload.");
+    return;
   }
-  Serial.println("");
-  Serial.print("Connected to WiFi network with IP Address: ");
-  Serial.println(WiFi.localIP());
 
-  // Initialize NTP
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  Serial.println("Waiting for NTP time sync...");
-  struct tm timeinfo;
-  while (!getLocalTime(&timeinfo)) {
-    Serial.print(".");
-    delay(1000);
-  }
-  Serial.println("\nTime synchronized.");
-}
+  // Use WiFiClientSecure for HTTPS/SSL connections (Vercel enforces HTTPS)
+  WiFiClientSecure client;
+  
+  // setInsecure() allows ESP32 to connect securely over TLS without needing
+  // to hardcode root SSL certificates that expire.
+  client.setInsecure();
 
-void loop() {
-  // Check WiFi connection status
-  if (WiFi.status() == WL_CONNECTED) {
+  HTTPClient http;
+  
+  Serial.print("[Cloud API] Connecting to: ");
+  Serial.println(cloudApiUrl);
 
-    // 1. Read Temperature
-    sensors.requestTemperatures();
-    float temperatureC = sensors.getTempCByIndex(0);
-
-    // 2. Get Timestamp
-    struct tm timeinfo;
-    if (!getLocalTime(&timeinfo)) {
-      Serial.println("Failed to obtain time");
-      return;
-    }
-
-    char timeStringBuff[50]; // Example: 2026-09-08T19:15:00
-    strftime(timeStringBuff, sizeof(timeStringBuff), "%Y-%m-%dT%H:%M:%S",
-             &timeinfo);
-
-    // 3. Prepare JSON Payload
-    StaticJsonDocument<200> doc;
-    doc["device_id"] = DEVICE_ID;
-    doc["milk_id"] = MILK_ID;
-    doc["temperature_c"] = temperatureC;
-    doc["timestamp"] = String(timeStringBuff);
-
-    String jsonOutput;
-    serializeJson(doc, jsonOutput);
-
-    // 4. Send HTTP POST Request
-    HTTPClient http;
-    http.begin(serverName);
+  if (http.begin(client, cloudApiUrl))
+  {
     http.addHeader("Content-Type", "application/json");
+    http.addHeader("User-Agent", "ColdGuard-ESP32/1.0"); // Prevents Cloudflare/Vercel bot blocking
+    
+    // Auto-follow HTTP 301/308 redirects from Vercel
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    http.setTimeout(10000); // 10 second timeout
 
-    int httpResponseCode = http.POST(jsonOutput);
+    // Build the JSON payload matching the backend schema
+    String jsonPayload = "{";
+    jsonPayload += "\"device_id\":\"" + String(DEVICE_ID) + "\",";
+    jsonPayload += "\"milk_id\":\"" + String(MILK_ID) + "\",";
+    jsonPayload += "\"temperature_c\":" + String(tempC, 2);
+    jsonPayload += "}";
 
-    if (httpResponseCode > 0) {
-      Serial.print("HTTP Response code: ");
-      Serial.println(httpResponseCode);
-      String payload = http.getString();
-      Serial.println(payload);
-    } else {
-      Serial.print("Error code: ");
-      Serial.println(httpResponseCode);
+    Serial.print("[Cloud API] Sending payload: ");
+    Serial.println(jsonPayload);
+
+    int httpResponseCode = http.POST(jsonPayload);
+
+    if (httpResponseCode > 0)
+    {
+      String response = http.getString();
+      Serial.print("[Cloud API] HTTP Code: ");
+      Serial.print(httpResponseCode);
+      Serial.print(" | Response: ");
+      Serial.println(response);
+    }
+    else
+    {
+      Serial.print("[Cloud API] Error posting data. Code: ");
+      Serial.print(httpResponseCode);
+      Serial.print(" (");
+      Serial.print(http.errorToString(httpResponseCode));
+      Serial.println(")");
     }
 
     http.end();
-  } else {
-    Serial.println("WiFi Disconnected");
+  }
+  else
+  {
+    Serial.println("[Cloud API] Unable to connect to HTTPS endpoint.");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sensor Reading Function
+// ---------------------------------------------------------------------------
+void readTemperature()
+{
+  sensors.requestTemperatures();
+  float temperature = sensors.getTempCByIndex(0);
+
+  if (temperature == DEVICE_DISCONNECTED_C)
+  {
+    Serial.println("ERROR: DS18B20 not detected on GPIO 4!");
+    safetyStatus = "SENSOR ERROR";
+    if (Blynk.connected())
+    {
+      Blynk.virtualWrite(V1, safetyStatus);
+    }
+    return;
   }
 
-  // Send reading every 5 minutes (300,000 ms)
-  delay(300000);
+  currentTemperature = temperature;
+
+  // Local temperature check
+  if (temperature <= 5.0)
+  {
+    safetyStatus = "SAFE";
+  }
+  else if (temperature <= 8.0)
+  {
+    safetyStatus = "CAUTION";
+  }
+  else
+  {
+    safetyStatus = "UNSAFE";
+  }
+
+  Serial.print("Temp: ");
+  Serial.print(currentTemperature, 2);
+  Serial.print(" °C | Local Status: ");
+  Serial.println(safetyStatus);
+
+  // Update Blynk
+  if (Blynk.connected())
+  {
+    Blynk.virtualWrite(V0, currentTemperature);
+    Blynk.virtualWrite(V1, safetyStatus);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Periodic Cloud Sync Trigger
+// ---------------------------------------------------------------------------
+void triggerCloudSync()
+{
+  if (currentTemperature != 0.0 && safetyStatus != "SENSOR ERROR")
+  {
+    sendDataToCloud(currentTemperature);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Serial Console Menu
+// ---------------------------------------------------------------------------
+void processSerialCommand()
+{
+  if (Serial.available())
+  {
+    String command = Serial.readStringUntil('\n');
+    command.trim();
+    command.toUpperCase();
+
+    if (command == "TEMP")
+    {
+      Serial.print("Current Temp: ");
+      Serial.print(currentTemperature, 2);
+      Serial.println(" °C");
+    }
+    else if (command == "STATUS")
+    {
+      Serial.print("Safety Status: ");
+      Serial.println(safetyStatus);
+    }
+    else if (command == "READ")
+    {
+      readTemperature();
+    }
+    else if (command == "SEND")
+    {
+      Serial.println("Manual trigger: Reading sensor and posting to Cloud...");
+      readTemperature();
+      sendDataToCloud(currentTemperature);
+    }
+    else if (command == "WIFI")
+    {
+      if (WiFi.status() == WL_CONNECTED)
+      {
+        Serial.println("WiFi: CONNECTED");
+        Serial.print("IP: ");
+        Serial.println(WiFi.localIP());
+        Serial.print("Signal (RSSI): ");
+        Serial.print(WiFi.RSSI());
+        Serial.println(" dBm");
+      }
+      else
+      {
+        Serial.println("WiFi: DISCONNECTED");
+      }
+    }
+    else if (command == "BLYNK")
+    {
+      Serial.println(Blynk.connected() ? "Blynk: CONNECTED" : "Blynk: DISCONNECTED");
+    }
+    else if (command == "HELP")
+    {
+      Serial.println("--- Available Commands ---");
+      Serial.println("TEMP   - Show current temperature");
+      Serial.println("STATUS - Show safety status");
+      Serial.println("READ   - Read sensor immediately");
+      Serial.println("SEND   - Read and immediately upload to Vercel/Cloud");
+      Serial.println("WIFI   - Show WiFi connection info");
+      Serial.println("BLYNK  - Show Blynk status");
+      Serial.println("HELP   - Show this command list");
+    }
+    else if (command.length() > 0)
+    {
+      Serial.print("Unknown command: ");
+      Serial.println(command);
+      Serial.println("Type HELP for available commands.");
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Setup
+// ---------------------------------------------------------------------------
+void setup()
+{
+  Serial.begin(115200);
+  delay(1000);
+
+  Serial.println();
+  Serial.println("=========================================");
+  Serial.println("    COLDGUARD AI — ESP32 CLOUD NODE      ");
+  Serial.println("=========================================");
+
+  sensors.begin();
+  Serial.println("DS18B20 sensor initialized on GPIO 4");
+
+  Serial.print("Connecting to WiFi: ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, pass);
+
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 30)
+  {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
+  Serial.println();
+
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    Serial.println("WiFi Connected!");
+    Serial.print("ESP32 IP: ");
+    Serial.println(WiFi.localIP());
+  }
+  else
+  {
+    Serial.println("WiFi Failed! Check SSID / Password.");
+  }
+
+  // Connect to Blynk
+  Serial.println("Connecting to Blynk Cloud...");
+  Blynk.config(BLYNK_AUTH_TOKEN);
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    Blynk.connect();
+  }
+
+  // Timer 1: Read temperature every 2 seconds for Blynk & Serial
+  timer.setInterval(2000L, readTemperature);
+
+  // Timer 2: Upload reading to Cloud API every CLOUD_POST_INTERVAL_MS (e.g. 10s)
+  timer.setInterval(CLOUD_POST_INTERVAL_MS, triggerCloudSync);
+
+  // Initial read
+  readTemperature();
+
+  Serial.println();
+  Serial.println("System Initialized!");
+  Serial.print("  • Target Cloud API: ");
+  Serial.println(cloudApiUrl);
+  Serial.println("Type HELP in Serial Monitor for commands.");
+  Serial.println("=========================================");
+}
+
+// ---------------------------------------------------------------------------
+// Main Loop
+// ---------------------------------------------------------------------------
+void loop()
+{
+  if (Blynk.connected())
+  {
+    Blynk.run();
+  }
+
+  timer.run();
+  processSerialCommand();
 }
